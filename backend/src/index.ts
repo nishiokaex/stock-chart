@@ -10,22 +10,25 @@ type QuoteResponse = {
   currency?: string
 }
 
-const fetchQuote = async (symbol: string): Promise<QuoteResponse> => {
-  const endpoint = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`
-  const response = await fetch(endpoint)
+const nowInSeconds = () => Math.floor(Date.now() / 1000)
 
-  if (!response.ok) {
-    throw new Error(`Yahoo Finance API error: ${response.status} ${response.statusText}`)
-  }
-
-  const data = await response.json<{ quoteResponse?: { result?: QuoteResponse[] } }>()
-  const quote = data.quoteResponse?.result?.[0]
-
-  if (!quote) {
-    throw new Error(`Quote not found for symbol: ${symbol}`)
-  }
-
-  return quote
+const DUMMY_QUOTES: Record<'nikkei' | 'topix', QuoteResponse> = {
+  nikkei: {
+    symbol: '^N225',
+    shortName: '日経平均株価',
+    regularMarketPrice: 40123.45,
+    regularMarketChange: 110.25,
+    regularMarketChangePercent: 0.28,
+    currency: 'JPY',
+  },
+  topix: {
+    symbol: '^TOPX',
+    shortName: 'TOPIX',
+    regularMarketPrice: 2775.32,
+    regularMarketChange: -4.12,
+    regularMarketChangePercent: -0.15,
+    currency: 'JPY',
+  },
 }
 
 type ForexTickerItem = {
@@ -107,23 +110,17 @@ app.get('/', (c) => {
 })
 
 app.get('/api/nikkei', async (c) => {
-  try {
-    const data = await fetchQuote('^N225')
-    return c.json(data)
-  } catch (error) {
-    console.error(error)
-    return c.json({ message: error instanceof Error ? error.message : 'Unexpected error' }, 500)
-  }
+  return c.json({
+    ...DUMMY_QUOTES.nikkei,
+    regularMarketTime: nowInSeconds(),
+  })
 })
 
 app.get('/api/topix', async (c) => {
-  try {
-    const data = await fetchQuote('^TOPX')
-    return c.json(data)
-  } catch (error) {
-    console.error(error)
-    return c.json({ message: error instanceof Error ? error.message : 'Unexpected error' }, 500)
-  }
+  return c.json({
+    ...DUMMY_QUOTES.topix,
+    regularMarketTime: nowInSeconds(),
+  })
 })
 
 app.get('/api/usdjpy', async (c) => {
