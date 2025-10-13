@@ -1,10 +1,9 @@
 import { Dimensions, StyleSheet, View } from 'react-native';
 import { Svg, Line, Rect, Text as SvgText } from 'react-native-svg';
+import { Card, Text, useTheme } from 'react-native-paper';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type PricePoint = {
   date: string;
@@ -90,67 +89,75 @@ function buildCandlestickData(data: PricePoint[]) {
 }
 
 export default function TabTwoScreen() {
-  const colorScheme = useColorScheme();
-  const themeColors = Colors[colorScheme ?? 'light'];
+  const theme = useTheme();
   const { candles, min, max, candleWidth } = buildCandlestickData(chartData);
   const latest = chartData.length > 0 ? chartData[chartData.length - 1] : undefined;
-  const cardBackgroundColor = colorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-  const bullishColor = colorScheme === 'dark' ? '#4ade80' : '#16a34a';
-  const bearishColor = colorScheme === 'dark' ? '#f87171' : '#dc2626';
+  const axisColor = theme.colors.outlineVariant ?? theme.colors.outline;
+  const axisLabelColor = theme.colors.onSurfaceVariant ?? theme.colors.onSurface;
+  const bullishColor = theme.colors.tertiary ?? theme.colors.primary;
+  const bearishColor = theme.colors.error;
 
   return (
     <ThemedView style={styles.screen}>
-      <ThemedText type="title" style={styles.title}>
-        AAPL ダミー株価チャート
-      </ThemedText>
+      <ThemedText type="title">AAPL ダミー株価チャート</ThemedText>
       <ThemedText type="subtitle" style={styles.subtitle}>
         終値 {latest?.close.toFixed(2) ?? '--'} USD ( {latest?.date ?? 'N/A'} )
       </ThemedText>
-      <View style={[styles.chartCard, { backgroundColor: cardBackgroundColor }]}>
-        <Svg width={svgWidth} height={CHART_HEIGHT}>
-          <Line
-            x1={0}
-            y1={CHART_HEIGHT}
-            x2={svgWidth}
-            y2={CHART_HEIGHT}
-            stroke={themeColors.icon}
-            strokeWidth={1}
-          />
-          <Line x1={0} y1={0} x2={0} y2={CHART_HEIGHT} stroke={themeColors.icon} strokeWidth={1} />
-          {candles.map(candle => (
+      <Card mode="elevated" style={styles.chartCard}>
+        <Card.Content style={styles.chartContent}>
+          <Svg width={svgWidth} height={CHART_HEIGHT}>
             <Line
-              key={`${candle.key}-wick`}
-              x1={candle.centerX}
-              y1={candle.highY}
-              x2={candle.centerX}
-              y2={candle.lowY}
-              stroke={themeColors.icon}
+              x1={0}
+              y1={CHART_HEIGHT}
+              x2={svgWidth}
+              y2={CHART_HEIGHT}
+              stroke={axisColor}
               strokeWidth={1}
             />
-          ))}
-          {candles.map(candle => (
-            <Rect
-              key={`${candle.key}-body`}
-              x={candle.centerX - candleWidth / 2}
-              y={candle.bodyTop}
-              width={candleWidth}
-              height={Math.max(candle.bodyBottom - candle.bodyTop, 1)}
-              fill={candle.isBullish ? bullishColor : bearishColor}
-              stroke={candle.isBullish ? bullishColor : bearishColor}
-              rx={2}
-            />
-          ))}
-          <SvgText x={svgWidth} y={12} fontSize={12} fill={themeColors.text} textAnchor="end">
-            {max.toFixed(1)} USD
-          </SvgText>
-          <SvgText x={svgWidth} y={CHART_HEIGHT - 6} fontSize={12} fill={themeColors.text} textAnchor="end">
-            {min.toFixed(1)} USD
-          </SvgText>
-        </Svg>
-        <View style={styles.legend}>
-          <ThemedText type="defaultSemiBold">期間: {chartData.length > 0 ? chartData[0].date : '--'} ～ {latest?.date ?? '--'}</ThemedText>
-        </View>
-      </View>
+            <Line x1={0} y1={0} x2={0} y2={CHART_HEIGHT} stroke={axisColor} strokeWidth={1} />
+            {candles.map(candle => (
+              <Line
+                key={`${candle.key}-wick`}
+                x1={candle.centerX}
+                y1={candle.highY}
+                x2={candle.centerX}
+                y2={candle.lowY}
+                stroke={axisColor}
+                strokeWidth={1}
+              />
+            ))}
+            {candles.map(candle => (
+              <Rect
+                key={`${candle.key}-body`}
+                x={candle.centerX - candleWidth / 2}
+                y={candle.bodyTop}
+                width={candleWidth}
+                height={Math.max(candle.bodyBottom - candle.bodyTop, 1)}
+                fill={candle.isBullish ? bullishColor : bearishColor}
+                stroke={candle.isBullish ? bullishColor : bearishColor}
+                rx={2}
+              />
+            ))}
+            <SvgText x={svgWidth} y={12} fontSize={12} fill={axisLabelColor} textAnchor="end">
+              {max.toFixed(1)} USD
+            </SvgText>
+            <SvgText
+              x={svgWidth}
+              y={CHART_HEIGHT - 6}
+              fontSize={12}
+              fill={axisLabelColor}
+              textAnchor="end"
+            >
+              {min.toFixed(1)} USD
+            </SvgText>
+          </Svg>
+          <View style={styles.legend}>
+            <Text variant="bodyLarge" style={styles.legendText}>
+              期間: {chartData.length > 0 ? chartData[0].date : '--'} ～ {latest?.date ?? '--'}
+            </Text>
+          </View>
+        </Card.Content>
+      </Card>
     </ThemedView>
   );
 }
@@ -162,22 +169,23 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     gap: 12,
   },
-  title: {
-    fontWeight: '600',
-  },
   subtitle: {
     marginBottom: 8,
   },
   chartCard: {
     borderRadius: 16,
-    padding: 16,
+  },
+  chartContent: {
+    paddingHorizontal: 0,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 12,
   },
   legend: {
     alignSelf: 'stretch',
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  legendText: {
+    fontWeight: '600',
   },
 });
