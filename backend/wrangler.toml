@@ -8,3 +8,6 @@ binding = "ASSETS"
 
 [build]
 command = "npm run build"
+
+[observability]
+enabled = true
