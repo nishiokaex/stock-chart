@@ -2,9 +2,6 @@ import { Dimensions, StyleSheet, View } from 'react-native';
 import { Svg, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { Card, Text, useTheme } from 'react-native-paper';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-
 type PricePoint = {
   date: string;
   open: number;
@@ -96,13 +93,16 @@ export default function TabTwoScreen() {
   const axisLabelColor = theme.colors.onSurfaceVariant ?? theme.colors.onSurface;
   const bullishColor = theme.colors.tertiary ?? theme.colors.primary;
   const bearishColor = theme.colors.error;
+  const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }];
 
   return (
-    <ThemedView style={styles.screen}>
-      <ThemedText type="title">AAPL ダミー株価チャート</ThemedText>
-      <ThemedText type="subtitle" style={styles.subtitle}>
+    <View style={screenStyle}>
+      <Text variant="headlineMedium" style={styles.title}>
+        AAPL ダミー株価チャート
+      </Text>
+      <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
         終値 {latest?.close.toFixed(2) ?? '--'} USD ( {latest?.date ?? 'N/A'} )
-      </ThemedText>
+      </Text>
       <Card mode="elevated" style={styles.chartCard}>
         <Card.Content style={styles.chartContent}>
           <Svg width={svgWidth} height={CHART_HEIGHT}>
@@ -158,7 +158,7 @@ export default function TabTwoScreen() {
           </View>
         </Card.Content>
       </Card>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -169,8 +169,14 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     gap: 12,
   },
+  title: {
+    fontWeight: '700',
+  },
   subtitle: {
     marginBottom: 8,
+  },
+  subtitleText: {
+    fontWeight: '600',
   },
   chartCard: {
     borderRadius: 16,

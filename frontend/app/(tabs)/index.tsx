@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 
 import { ListItem, type MarketQuote } from '@/components/list-item'
-import { ThemedText } from '@/components/themed-text'
-import { ThemedView } from '@/components/themed-view'
+import { Text, useTheme } from 'react-native-paper'
 
 type MarketKey = 'nikkei' | 'topix' | 'usdjpy'
 
@@ -34,6 +33,7 @@ const buildUrl = (path: string) => {
 }
 
 export default function HomeScreen() {
+  const theme = useTheme()
   const [marketState, setMarketState] = useState<MarketState>({
     nikkei: {},
     topix: {},
@@ -106,14 +106,18 @@ export default function HomeScreen() {
     [],
   )
 
+  const containerStyle = [styles.container, { backgroundColor: theme.colors.background }]
+
   return (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <ThemedView style={styles.container}>
+      <View style={containerStyle}>
         <View style={styles.header}>
-          <ThemedText type="title">マーケット</ThemedText>
+          <Text variant="headlineMedium" style={styles.title}>
+            マーケット
+          </Text>
         </View>
         <View style={styles.listContainer}>
           {marketEntries.map(([key, config]) => (
@@ -127,7 +131,7 @@ export default function HomeScreen() {
             />
           ))}
         </View>
-      </ThemedView>
+      </View>
     </ScrollView>
   )
 }
@@ -143,6 +147,9 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: 8,
+  },
+  title: {
+    fontWeight: '700',
   },
   listContainer: {
     gap: 12,
