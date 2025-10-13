@@ -1,0 +1,10 @@
+name = "backend"
+main = "src/index.ts"
+compatibility_date = "2025-10-13"
+
+[assets]
+directory = "../frontend/dist"
+binding = "ASSETS"
+
+[build]
+command = "npm run build"

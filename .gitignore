@@ -1,0 +1,29 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Expo / React Native
+.expo/
+.expo-shared/
+.expo/web/
+.env.local
+
+# Build outputs
+backend/static/*
+!backend/static/.gitkeep
+frontend/web-build/*
+!frontend/web-build/.gitkeep
+frontend/dist/
+
+# Wrangler / Cloudflare
+/.wrangler/
+
+# macOS
+.DS_Store
+
