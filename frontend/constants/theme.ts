@@ -93,7 +93,6 @@ export const flutterLightTheme: MD3Theme = {
     ...MD3LightTheme.colors,
     ...flutterLightColors,
   },
-  roundness: 12,
 };
 
 export const flutterDarkTheme: MD3Theme = {
@@ -102,7 +101,6 @@ export const flutterDarkTheme: MD3Theme = {
     ...MD3DarkTheme.colors,
     ...flutterDarkColors,
   },
-  roundness: 12,
 };
 
 export const Colors = {
