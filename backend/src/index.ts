@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 
 type QuoteResponse = {
   symbol: string
-  shortName?: string
   regularMarketPrice?: number
   regularMarketChange?: number
   regularMarketChangePercent?: number
@@ -15,7 +14,6 @@ const nowInSeconds = () => Math.floor(Date.now() / 1000)
 const DUMMY_QUOTES: Record<'nikkei' | 'topix', QuoteResponse> = {
   nikkei: {
     symbol: '^N225',
-    shortName: '日経平均株価',
     regularMarketPrice: 40123.45,
     regularMarketChange: 110.25,
     regularMarketChangePercent: 0.28,
@@ -23,7 +21,6 @@ const DUMMY_QUOTES: Record<'nikkei' | 'topix', QuoteResponse> = {
   },
   topix: {
     symbol: '^TOPX',
-    shortName: 'TOPIX',
     regularMarketPrice: 2775.32,
     regularMarketChange: -4.12,
     regularMarketChangePercent: -0.15,
@@ -94,7 +91,6 @@ const fetchUsdJpyQuote = async (): Promise<QuoteResponse> => {
 
   return {
     symbol: 'USDJPY',
-    shortName: 'ドル円',
     regularMarketPrice: price,
     regularMarketChange: change,
     regularMarketChangePercent: changePercent,

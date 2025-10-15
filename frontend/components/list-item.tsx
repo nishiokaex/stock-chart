@@ -3,7 +3,6 @@ import { ActivityIndicator, Card, Text, useTheme } from 'react-native-paper';
 
 export type MarketQuote = {
   symbol: string;
-  shortName?: string;
   regularMarketPrice?: number;
   regularMarketChange?: number;
   regularMarketChangePercent?: number;
@@ -61,11 +60,6 @@ export function ListItem({ title, quote, loading, error, fractionDigits = 2 }: L
           <Text variant="bodyMedium" style={styles.symbol}>
             {quote?.symbol ?? '--'}
           </Text>
-          {quote?.shortName ? (
-            <Text variant="bodySmall" style={styles.shortName}>
-              {quote.shortName}
-            </Text>
-          ) : null}
         </View>
         <View style={styles.rightContainer}>
           {loading ? (
@@ -112,9 +106,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   symbol: {
-    opacity: 0.7,
-  },
-  shortName: {
     opacity: 0.7,
   },
   price: {
