@@ -93,7 +93,6 @@ export function ListItem({ title, quote, loading, error, fractionDigits = 2 }: L
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
     marginBottom: 12,
   },
   content: {
