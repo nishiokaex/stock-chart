@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 
+import { AppHeader } from '@/components/app-header'
 import { ListItem, type MarketQuote } from '@/components/list-item'
-import { Text, useTheme } from 'react-native-paper'
+import { useTheme } from 'react-native-paper'
 
 type MarketKey = 'nikkei' | 'topix' | 'usdjpy'
 
@@ -106,50 +107,51 @@ export default function HomeScreen() {
     [],
   )
 
-  const containerStyle = [styles.container, { backgroundColor: theme.colors.background }]
+  const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }]
+  const scrollStyle = [styles.scroll, { backgroundColor: theme.colors.background }]
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <View style={containerStyle}>
-        <View style={styles.header}>
-          <Text variant="headlineMedium" style={styles.title}>
-            マーケット
-          </Text>
+    <View style={screenStyle}>
+      <AppHeader title="マーケット" />
+      <ScrollView
+        style={scrollStyle}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.content}>
+          <View style={styles.listContainer}>
+            {marketEntries.map(([key, config]) => (
+              <ListItem
+                key={key}
+                title={config.label}
+                quote={marketState[key].quote}
+                error={marketState[key].error}
+                loading={isInitialLoading}
+                fractionDigits={config.fractionDigits}
+              />
+            ))}
+          </View>
         </View>
-        <View style={styles.listContainer}>
-          {marketEntries.map(([key, config]) => (
-            <ListItem
-              key={key}
-              title={config.label}
-              quote={marketState[key].quote}
-              error={marketState[key].error}
-              loading={isInitialLoading}
-              fractionDigits={config.fractionDigits}
-            />
-          ))}
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 16,
     paddingVertical: 24,
+    flexGrow: 1,
   },
-  container: {
+  content: {
     flex: 1,
     gap: 24,
-  },
-  header: {
-    gap: 8,
-  },
-  title: {
-    fontWeight: '700',
   },
   listContainer: {
     gap: 12,

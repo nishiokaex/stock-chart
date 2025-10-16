@@ -7,6 +7,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { PaperProvider, adaptNavigationTheme } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { flutterDarkTheme, flutterLightTheme } from '@/constants/theme';
@@ -48,14 +49,16 @@ export default function RootLayout() {
       };
 
   return (
-    <PaperProvider theme={paperTheme}>
-      <ThemeProvider value={navigationTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-      </ThemeProvider>
-    </PaperProvider>
+    <SafeAreaProvider>
+      <PaperProvider theme={paperTheme}>
+        <ThemeProvider value={navigationTheme}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+          <StatusBar style={isDark ? 'light' : 'dark'} />
+        </ThemeProvider>
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Card, Text, useTheme } from 'react-native-paper';
 
+import { AppHeader } from '@/components/app-header';
 import { InteractiveCandleChart } from '@/components/charts';
 import type { ChartStyleConfig } from '@/lib/charts/style';
 import { fetchMockCandleData } from '@/lib/charts/mock-data';
@@ -47,31 +48,35 @@ export default function ExploreScreen() {
   );
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }];
+  const contentStyle = [styles.content, { backgroundColor: theme.colors.background }];
 
   return (
     <View style={screenStyle}>
-      <Text variant="headlineMedium" style={styles.title}>
-        AAPL ダミー株価チャート
-      </Text>
-      <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
-        終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
-      </Text>
-      <Card mode="elevated" style={styles.card}>
-        <Card.Content style={styles.cardContent}>
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-            </View>
-          ) : (
-            <InteractiveCandleChart
-              candles={candles}
-              trendDefinitions={trendDefinitions}
-              styleConfig={chartStyle}
-              style={styles.chart}
-            />
-          )}
-        </Card.Content>
-      </Card>
+      <AppHeader title="チャート" />
+      <View style={contentStyle}>
+        <Text variant="headlineMedium" style={styles.title}>
+          AAPL ダミー株価チャート
+        </Text>
+        <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
+          終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
+        </Text>
+        <Card mode="elevated" style={styles.card}>
+          <Card.Content style={styles.cardContent}>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : (
+              <InteractiveCandleChart
+                candles={candles}
+                trendDefinitions={trendDefinitions}
+                styleConfig={chartStyle}
+                style={styles.chart}
+              />
+            )}
+          </Card.Content>
+        </Card>
+      </View>
     </View>
   );
 }
@@ -89,6 +94,9 @@ function formatDate(timestamp?: number) {
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+  },
+  content: {
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 24,
