@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Candle, TrendDefinition } from "../lib/charts/types";
@@ -137,28 +138,25 @@ export function useCandleData({
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        symbol,
-        interval,
-        range,
-      });
-      const response = await fetch(`${endpoint}?${params.toString()}`, {
+      const response = await axios.get<ApiResponse>(endpoint, {
+        params: {
+          symbol,
+          interval,
+          range,
+        },
         signal: controller.signal,
       });
-      if (!response.ok) {
-        throw new Error(`Failed to load candle data (${response.status})`);
-      }
-      const payload = (await response.json()) as ApiResponse;
+      const payload = response.data;
       const mapped = mapPayload(payload);
       const withIndicators = applyLocalIndicators(mapped.candles, mapped.definitions);
       setCandles(withIndicators.candles);
       setTrendDefinitions(withIndicators.definitions);
-      setLoading(false);
     } catch (fetchError) {
-      if ((fetchError as Error).name === "AbortError") {
+      if (axios.isCancel(fetchError)) {
         return;
       }
       setError(fetchError as Error);
+    } finally {
       setLoading(false);
     }
   }, [

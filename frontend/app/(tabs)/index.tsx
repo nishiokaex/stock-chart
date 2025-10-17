@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 
@@ -47,11 +48,8 @@ export default function HomeScreen() {
     const entries = Object.entries(MARKET_CONFIG) as [MarketKey, MarketConfig][]
     const settled = await Promise.allSettled(
       entries.map(async ([key, config]) => {
-        const response = await fetch(buildUrl(config.path))
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-        const json = (await response.json()) as MarketQuote
+        const { data } = await axios.get<MarketQuote>(buildUrl(config.path))
+        const json = data
         if (!json || typeof json !== 'object') {
           throw new Error('不正なレスポンスです。')
         }
