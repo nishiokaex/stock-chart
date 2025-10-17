@@ -1,10 +1,18 @@
 import axios from 'axios'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 
 import { AppHeader } from '@/components/app-header'
-import { ListItem, type MarketQuote } from '@/components/list-item'
-import { useTheme } from 'react-native-paper'
+import {
+  ActivityIndicator,
+  Divider,
+  HelperText,
+  List,
+  Surface,
+  Text,
+  useTheme,
+} from 'react-native-paper'
+import type { MarketQuote } from '@/types/market'
 
 type MarketKey = 'nikkei' | 'topix' | 'usdjpy'
 
@@ -32,6 +40,30 @@ const buildUrl = (path: string) => {
     return path
   }
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+const formatNumber = (value: number | undefined, maximumFractionDigits: number) => {
+  if (value === undefined || Number.isNaN(value)) {
+    return '--'
+  }
+  return value.toLocaleString('ja-JP', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  })
+}
+
+const formatChangeText = (
+  change: number | undefined,
+  changePercent: number | undefined,
+  fractionDigits: number,
+) => {
+  if (change === undefined || changePercent === undefined) {
+    return '--'
+  }
+  const sign = change > 0 ? '+' : change < 0 ? '-' : ''
+  const formattedChange = formatNumber(Math.abs(change), fractionDigits)
+  const formattedPercent = Math.abs(changePercent).toFixed(2)
+  return `${sign}${formattedChange} (${sign}${formattedPercent}%)`
 }
 
 export default function HomeScreen() {
@@ -107,6 +139,8 @@ export default function HomeScreen() {
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }]
   const scrollStyle = [styles.scroll, { backgroundColor: theme.colors.background }]
+  const surfaceStyle = [styles.sectionSurface, { backgroundColor: theme.colors.surface }]
+  const positiveColor = theme.colors.tertiary ?? '#16a34a'
 
   return (
     <View style={screenStyle}>
@@ -116,20 +150,56 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.content}>
-          <View style={styles.listContainer}>
-            {marketEntries.map(([key, config]) => (
-              <ListItem
-                key={key}
-                title={config.label}
-                quote={marketState[key].quote}
-                error={marketState[key].error}
-                loading={isInitialLoading}
-                fractionDigits={config.fractionDigits}
-              />
-            ))}
-          </View>
-        </View>
+        <Surface mode="flat" style={surfaceStyle}>
+          <List.Section style={styles.listSection}>
+            {marketEntries.map(([key, config], index) => {
+              const { quote, error } = marketState[key]
+              const price = quote?.regularMarketPrice
+              const change = quote?.regularMarketChange
+              const changePercent = quote?.regularMarketChangePercent
+              const currency = quote?.currency
+              const changeColor =
+                change === undefined || change === 0
+                  ? theme.colors.onSurface
+                  : change > 0
+                  ? positiveColor
+                  : theme.colors.error
+
+              return (
+                <Fragment key={key}>
+                  <List.Item
+                    title={config.label}
+                    titleStyle={styles.listTitle}
+                    description={quote?.symbol ?? '--'}
+                    descriptionStyle={styles.symbol}
+                    right={() => (
+                      <View style={styles.rightContainer}>
+                        {isInitialLoading ? (
+                          <ActivityIndicator animating color={theme.colors.primary} />
+                        ) : error ? (
+                          <HelperText type="error" visible style={styles.errorText}>
+                            {error}
+                          </HelperText>
+                        ) : (
+                          <>
+                            <Text variant="titleMedium" style={styles.price}>
+                              {formatNumber(price, config.fractionDigits)}
+                              {currency ? ` ${currency}` : ''}
+                            </Text>
+                            <Text variant="bodyMedium" style={[styles.change, { color: changeColor }]}>
+                              {formatChangeText(change, changePercent, config.fractionDigits)}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    )}
+                  />
+                  {index < marketEntries.length - 1 && <Divider inset />}
+                </Fragment>
+              )
+            })}
+          </List.Section>
+        </Surface>
       </ScrollView>
     </View>
   )
@@ -143,15 +213,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 24,
-    flexGrow: 1,
+    padding: 16,
+    gap: 16,
   },
-  content: {
-    flex: 1,
-    gap: 24,
+  sectionSurface: {
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  listContainer: {
-    gap: 12,
+  listSection: {
+    margin: 0,
+    paddingVertical: 0,
+  },
+  listTitle: {
+    fontWeight: '600',
+  },
+  symbol: {
+    opacity: 0.7,
+  },
+  rightContainer: {
+    minWidth: 140,
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  price: {
+    fontWeight: '600',
+  },
+  change: {
+    fontWeight: '500',
+  },
+  errorText: {
+    textAlign: 'right',
+    marginHorizontal: 0,
+    paddingHorizontal: 0,
   },
 })
