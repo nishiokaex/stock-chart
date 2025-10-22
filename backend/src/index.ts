@@ -44,6 +44,40 @@ type ForexTickerResponse = {
   data?: ForexTickerItem[]
 }
 
+type OhlcvItem = {
+  date: string
+  open: number
+  high: number
+  low: number
+  closeAdjusted: number
+  volume: number
+}
+
+const MAX_CALENDAR_DAYS_LOOKBACK = 220
+const TARGET_DATA_POINTS = 100
+
+type YahooFinanceModule = typeof import('yahoo-finance2')
+type YahooFinanceInstance = InstanceType<YahooFinanceModule['default']>
+
+let yahooFinanceClientPromise: Promise<YahooFinanceInstance> | null = null
+
+const loadYahooFinance = async (): Promise<YahooFinanceInstance> => {
+  const globalAny = globalThis as Record<string, unknown>
+
+  if (globalAny.__dirname === undefined) {
+    globalAny.__dirname = '/'
+  }
+  if (globalAny.__filename === undefined) {
+    globalAny.__filename = '/index.js'
+  }
+
+  if (!yahooFinanceClientPromise) {
+    yahooFinanceClientPromise = import('yahoo-finance2').then((module) => new module.default())
+  }
+
+  return yahooFinanceClientPromise
+}
+
 const fetchUsdJpyQuote = async (): Promise<QuoteResponse> => {
   const endpoint = 'https://forex-api.coin.z.com/public/v1/ticker'
   const response = await fetch(endpoint)
@@ -99,6 +133,62 @@ const fetchUsdJpyQuote = async (): Promise<QuoteResponse> => {
   }
 }
 
+const fetchDailyOhlcv = async (symbol: string): Promise<OhlcvItem[]> => {
+  if (!symbol) {
+    throw new Error('symbol is required')
+  }
+
+  const yahooFinance = await loadYahooFinance()
+
+  const today = new Date()
+  const period1 = new Date(today)
+  period1.setDate(period1.getDate() - MAX_CALENDAR_DAYS_LOOKBACK)
+
+  const quotes = await yahooFinance.historical(symbol, {
+    period1,
+    period2: today,
+    interval: '1d',
+  })
+
+  const sanitized = quotes
+    .filter((quote) => {
+      const { open, high, low, close, adjClose, volume, date } = quote
+      return (
+        typeof open === 'number' &&
+        typeof high === 'number' &&
+        typeof low === 'number' &&
+        typeof close === 'number' &&
+        typeof adjClose === 'number' &&
+        typeof volume === 'number' &&
+        Number.isFinite(open) &&
+        Number.isFinite(high) &&
+        Number.isFinite(low) &&
+        Number.isFinite(close) &&
+        Number.isFinite(adjClose) &&
+        Number.isFinite(volume) &&
+        date instanceof Date &&
+        !Number.isNaN(date.getTime())
+      )
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .map<OhlcvItem>((quote) => ({
+      date: quote.date.toISOString().slice(0, 10),
+      open: quote.open!,
+      high: quote.high!,
+      low: quote.low!,
+      closeAdjusted: quote.adjClose!,
+      volume: quote.volume!,
+    }))
+
+  const sliced = sanitized.slice(-TARGET_DATA_POINTS)
+
+  if (sliced.length === 0) {
+    throw new Error(`No OHLCV data returned for symbol "${symbol}"`)
+  }
+
+  return sliced
+}
+
 const app = new Hono()
 
 app.get('/', (c) => {
@@ -126,6 +216,28 @@ app.get('/api/usdjpy', async (c) => {
   } catch (error) {
     console.error(error)
     return c.json({ message: error instanceof Error ? error.message : 'Unexpected error' }, 500)
+  }
+})
+
+app.get('/api/stocks/:symbol/ohlcv', async (c) => {
+  const symbol = c.req.param('symbol')?.trim()
+
+  if (!symbol) {
+    return c.json({ message: 'symbol パラメーターは必須です' }, 400)
+  }
+
+  try {
+    const ohlcv = await fetchDailyOhlcv(symbol)
+    return c.json({
+      symbol,
+      interval: '1d',
+      points: ohlcv.length,
+      data: ohlcv,
+    })
+  } catch (error) {
+    console.error(error)
+    const message = error instanceof Error ? error.message : 'Unexpected error'
+    return c.json({ message }, 500)
   }
 })
 

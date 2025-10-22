@@ -5,10 +5,14 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "yahoo-finance2": ["node_modules/yahoo-finance2/esm/src/index.d.ts"]
+    },
     "lib": [
       "ESNext"
     ],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
-  },
+  }
 }

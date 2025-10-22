@@ -1,6 +1,7 @@
 name = "backend"
 main = "src/index.ts"
 compatibility_date = "2025-10-13"
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "../frontend/dist"
