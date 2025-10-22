@@ -219,11 +219,11 @@ app.get('/api/usdjpy', async (c) => {
   }
 })
 
-app.get('/api/stocks/:symbol/ohlcv', async (c) => {
-  const symbol = c.req.param('symbol')?.trim()
+app.get('/api/stocks', async (c) => {
+  const symbol = c.req.query('symbol')?.trim()
 
   if (!symbol) {
-    return c.json({ message: 'symbol パラメーターは必須です' }, 400)
+    return c.json({ message: 'symbol クエリパラメーターは必須です' }, 400)
   }
 
   try {
