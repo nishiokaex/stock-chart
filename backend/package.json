@@ -9,9 +9,9 @@
   },
   "dependencies": {
     "hono": "^4.9.12",
-    "yahoo-finance2": "^3.10.0"
+    "yahoo-finance2": "3.10.0"
   },
   "devDependencies": {
-    "wrangler": "^4.43.0"
+    "wrangler": "4.44.0"
   }
 }
