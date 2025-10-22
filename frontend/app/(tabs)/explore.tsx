@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Card, Text, useTheme } from 'react-native-paper';
+import { Card, HelperText, Text, useTheme } from 'react-native-paper';
 
 import { AppHeader } from '@/components/app-header';
 import { InteractiveCandleChart } from '@/components/charts';
 import type { ChartStyleConfig } from '@/lib/charts/style';
-import { fetchMockCandleData } from '@/lib/charts/mock-data';
+import { fetchStockCandleData } from '@/lib/charts/stock-data';
 import type { Candle, TrendDefinition } from '@/lib/charts/types';
 
 export default function ExploreScreen() {
@@ -13,15 +13,24 @@ export default function ExploreScreen() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trendDefinitions, setTrendDefinitions] = useState<TrendDefinition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const data = await fetchMockCandleData();
+        const data = await fetchStockCandleData('AAPL');
         if (!cancelled) {
           setCandles(data.candles);
           setTrendDefinitions(data.trendDefinitions);
+          setError(null);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setCandles([]);
+          setTrendDefinitions([]);
+          setError('データの取得に失敗しました。');
         }
       } finally {
         if (!cancelled) {
@@ -55,16 +64,27 @@ export default function ExploreScreen() {
       <AppHeader title="チャート" />
       <View style={contentStyle}>
         <Text variant="headlineMedium" style={styles.title}>
-          AAPL ダミー株価チャート
+          AAPL 株価チャート
         </Text>
         <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
           終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
         </Text>
+        {error ? (
+          <HelperText type="error" visible style={styles.errorText}>
+            {error}
+          </HelperText>
+        ) : null}
         <Card mode="elevated" style={styles.card}>
           <Card.Content style={styles.cardContent}>
             {loading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : error ? (
+              <View style={styles.loadingContainer}>
+                <Text variant="bodyLarge" style={styles.errorMessage}>
+                  データがありません
+                </Text>
               </View>
             ) : (
               <InteractiveCandleChart
@@ -128,5 +148,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorText: {
+    marginVertical: -4,
+    paddingHorizontal: 0,
+  },
+  errorMessage: {
+    textAlign: 'center',
+    opacity: 0.7,
   },
 });

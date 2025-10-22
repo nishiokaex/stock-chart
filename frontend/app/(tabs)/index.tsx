@@ -12,6 +12,7 @@ import {
   Text,
   useTheme,
 } from 'react-native-paper'
+import { buildApiUrl } from '@/lib/api/base'
 import type { MarketQuote } from '@/types/market'
 
 type MarketKey = 'nikkei' | 'topix' | 'usdjpy'
@@ -28,18 +29,6 @@ const MARKET_CONFIG: Record<MarketKey, MarketConfig> = {
   nikkei: { label: '日経平均', path: '/api/nikkei', fractionDigits: 2 },
   topix: { label: 'TOPIX', path: '/api/topix', fractionDigits: 2 },
   usdjpy: { label: 'ドル円', path: '/api/usdjpy', fractionDigits: 3 },
-}
-
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8787').replace(
-  /\/$/,
-  '',
-)
-
-const buildUrl = (path: string) => {
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return path
-  }
-  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 const formatNumber = (value: number | undefined, maximumFractionDigits: number) => {
@@ -80,7 +69,7 @@ export default function HomeScreen() {
     const entries = Object.entries(MARKET_CONFIG) as [MarketKey, MarketConfig][]
     const settled = await Promise.allSettled(
       entries.map(async ([key, config]) => {
-        const { data } = await axios.get<MarketQuote>(buildUrl(config.path))
+        const { data } = await axios.get<MarketQuote>(buildApiUrl(config.path))
         const json = data
         if (!json || typeof json !== 'object') {
           throw new Error('不正なレスポンスです。')
