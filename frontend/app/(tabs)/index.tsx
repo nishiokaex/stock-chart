@@ -5,31 +5,79 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { AppHeader } from '@/components/app-header'
 import {
   ActivityIndicator,
+  Button,
   Divider,
   HelperText,
   List,
+  Searchbar,
   Surface,
   Text,
   useTheme,
 } from 'react-native-paper'
 import { buildApiUrl } from '@/lib/api/base'
+import {
+  loadCustomSymbols,
+  saveCustomSymbols,
+  type StoredCustomSymbol,
+} from '@/lib/storage/custom-markets'
 import type { MarketQuote } from '@/types/market'
+import type { SymbolSearchItem, SymbolSearchResponse } from '@/types/symbol'
 
-type MarketKey = 'nikkei' | 'topix' | 'usdjpy'
-
-type MarketConfig = {
+type MarketEntry = {
+  id: string
   label: string
   path: string
   fractionDigits: number
+  symbol?: string
+  type: 'builtin' | 'custom'
 }
 
-type MarketState = Record<MarketKey, { quote?: MarketQuote; error?: string }>
+type MarketState = Record<string, { quote?: MarketQuote; error?: string }>
 
-const MARKET_CONFIG: Record<MarketKey, MarketConfig> = {
-  nikkei: { label: '日経平均', path: '/api/nikkei', fractionDigits: 2 },
-  topix: { label: 'TOPIX', path: '/api/topix', fractionDigits: 2 },
-  usdjpy: { label: 'ドル円', path: '/api/usdjpy', fractionDigits: 3 },
-}
+const DEFAULT_MARKETS: MarketEntry[] = [
+  {
+    id: 'builtin:nikkei',
+    label: '日経平均',
+    path: '/api/nikkei',
+    fractionDigits: 2,
+    symbol: '^N225',
+    type: 'builtin',
+  },
+  {
+    id: 'builtin:topix',
+    label: 'TOPIX',
+    path: '/api/topix',
+    fractionDigits: 2,
+    symbol: '^TOPX',
+    type: 'builtin',
+  },
+  {
+    id: 'builtin:usdjpy',
+    label: 'ドル円',
+    path: '/api/usdjpy',
+    fractionDigits: 3,
+    symbol: 'USDJPY',
+    type: 'builtin',
+  },
+]
+
+const SEARCH_DEBOUNCE_MS = 300
+const CUSTOM_SYMBOL_FRACTION_DIGITS = 2
+
+const buildCustomEntries = (symbols: StoredCustomSymbol[]): MarketEntry[] =>
+  symbols.map((item) => ({
+    id: `custom:${item.symbol}`,
+    label: item.label || item.symbol,
+    path: `/api/quote?symbol=${encodeURIComponent(item.symbol)}`,
+    fractionDigits: CUSTOM_SYMBOL_FRACTION_DIGITS,
+    symbol: item.symbol,
+    type: 'custom',
+  }))
+
+const buildAllEntries = (symbols: StoredCustomSymbol[]) => [
+  ...DEFAULT_MARKETS,
+  ...buildCustomEntries(symbols),
+]
 
 const formatNumber = (value: number | undefined, maximumFractionDigits: number) => {
   if (value === undefined || Number.isNaN(value)) {
@@ -57,41 +105,58 @@ const formatChangeText = (
 
 export default function HomeScreen() {
   const theme = useTheme()
-  const [marketState, setMarketState] = useState<MarketState>({
-    nikkei: {},
-    topix: {},
-    usdjpy: {},
-  })
-  const [loading, setLoading] = useState<boolean>(true)
+  const [marketState, setMarketState] = useState<MarketState>({})
+  const [customSymbols, setCustomSymbols] = useState<StoredCustomSymbol[]>([])
   const [refreshing, setRefreshing] = useState<boolean>(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SymbolSearchItem[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string>()
+  const [pendingSymbol, setPendingSymbol] = useState<string | null>(null)
 
-  const fetchMarketData = useCallback(async () => {
-    const entries = Object.entries(MARKET_CONFIG) as [MarketKey, MarketConfig][]
+  useEffect(() => {
+    const load = async () => {
+      const stored = await loadCustomSymbols()
+      setCustomSymbols(stored)
+    }
+    load()
+  }, [])
+
+  const marketEntries = useMemo(() => buildAllEntries(customSymbols), [customSymbols])
+  const existingSymbols = useMemo(() => {
+    const set = new Set<string>()
+    marketEntries.forEach((entry) => {
+      if (entry.symbol) {
+        set.add(entry.symbol)
+      }
+    })
+    return set
+  }, [marketEntries])
+
+  const fetchMarketData = useCallback(async (entries: MarketEntry[]) => {
+    if (entries.length === 0) {
+      setMarketState({})
+      return
+    }
+
     const settled = await Promise.allSettled(
-      entries.map(async ([key, config]) => {
-        const { data } = await axios.get<MarketQuote>(buildApiUrl(config.path))
-        const json = data
-        if (!json || typeof json !== 'object') {
+      entries.map(async (entry) => {
+        const { data } = await axios.get<MarketQuote>(buildApiUrl(entry.path))
+        if (!data || typeof data !== 'object') {
           throw new Error('不正なレスポンスです。')
         }
-        return [key, json] as const
+        return [entry.id, data] as const
       }),
     )
 
-    const nextState: MarketState = {
-      nikkei: {},
-      topix: {},
-      usdjpy: {},
-    }
-
+    const nextState: MarketState = {}
     settled.forEach((result, index) => {
-      const [key] = entries[index]
+      const entry = entries[index]
       if (result.status === 'fulfilled') {
-        nextState[key] = { quote: result.value[1] }
+        nextState[entry.id] = { quote: result.value[1] }
       } else {
-        const reason = result.reason
-        console.error(`[market] ${key} の取得に失敗しました`, reason)
-        nextState[key] = {
+        console.error(`[market] ${entry.id} の取得に失敗しました`, result.reason)
+        nextState[entry.id] = {
           error: 'データの取得に失敗しました。',
         }
       }
@@ -102,29 +167,83 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        await fetchMarketData()
-      } finally {
-        setLoading(false)
-      }
+      await fetchMarketData(marketEntries)
     }
     load()
-  }, [fetchMarketData])
+  }, [fetchMarketData, marketEntries])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      await fetchMarketData()
+      await fetchMarketData(marketEntries)
     } finally {
       setRefreshing(false)
     }
-  }, [fetchMarketData])
+  }, [fetchMarketData, marketEntries])
 
-  const isInitialLoading = loading && !refreshing
-  const marketEntries = useMemo(
-    () => Object.entries(MARKET_CONFIG) as [MarketKey, MarketConfig][],
+  const performSearch = useCallback(
+    async (query: string) => {
+      const trimmed = query.trim()
+      if (!trimmed) {
+        setSearchResults([])
+        setSearchError(undefined)
+        return
+      }
+
+      setIsSearching(true)
+      setSearchError(undefined)
+      try {
+        const { data } = await axios.get<SymbolSearchResponse>(
+          buildApiUrl(`/api/symbol?q=${encodeURIComponent(trimmed)}&per_page=20`),
+        )
+        setSearchResults(data.items ?? [])
+      } catch (error) {
+        console.error('[market] シンボル検索に失敗しました', error)
+        setSearchError('検索に失敗しました。時間をおいて再度お試しください。')
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    },
     [],
   )
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      void performSearch(searchQuery)
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => clearTimeout(handler)
+  }, [performSearch, searchQuery])
+
+  const handleAddSymbol = useCallback(
+    async (item: SymbolSearchItem) => {
+      if (existingSymbols.has(item.symbol)) {
+        return
+      }
+
+      const nextSymbols = [
+        ...customSymbols,
+        { symbol: item.symbol, label: item.name || item.symbol },
+      ]
+
+      setCustomSymbols(nextSymbols)
+      setPendingSymbol(item.symbol)
+      try {
+        await saveCustomSymbols(nextSymbols)
+        await fetchMarketData(buildAllEntries(nextSymbols))
+      } catch (error) {
+        console.error('[market] カスタムシンボルの保存に失敗しました', error)
+        setCustomSymbols(customSymbols)
+        setSearchError('シンボルの追加に失敗しました。もう一度お試しください。')
+      } finally {
+        setPendingSymbol(null)
+      }
+    },
+    [customSymbols, existingSymbols, fetchMarketData],
+  )
+
+  const hasQuery = Boolean(searchQuery.trim())
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }]
   const scrollStyle = [styles.scroll, { backgroundColor: theme.colors.background }]
@@ -140,9 +259,61 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Surface mode="flat" style={surfaceStyle}>
+          <View style={styles.searchContainer}>
+            <Searchbar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="シンボルを検索"
+              autoCorrect={false}
+              autoCapitalize="characters"
+            />
+            {searchError ? (
+              <HelperText type="error" visible>
+                {searchError}
+              </HelperText>
+            ) : null}
+            {hasQuery ? (
+              <List.Section style={styles.searchListSection}>
+                {isSearching ? (
+                  <ActivityIndicator animating color={theme.colors.primary} />
+                ) : searchResults.length === 0 ? (
+                  <Text variant="bodyMedium" style={styles.searchEmptyText}>
+                    該当するシンボルがありません。
+                  </Text>
+                ) : (
+                  searchResults.map((item, index) => {
+                    const disabled = existingSymbols.has(item.symbol)
+                    return (
+                      <Fragment key={item.symbol}>
+                        <List.Item
+                          title={item.symbol}
+                          description={item.name}
+                          right={() => (
+                            <Button
+                              compact
+                              mode="text"
+                              onPress={() => handleAddSymbol(item)}
+                              disabled={disabled}
+                              loading={pendingSymbol === item.symbol}
+                            >
+                              {disabled ? '追加済み' : '追加'}
+                            </Button>
+                          )}
+                        />
+                        {index < searchResults.length - 1 && <Divider inset />}
+                      </Fragment>
+                    )
+                  })
+                )}
+              </List.Section>
+            ) : null}
+          </View>
+        </Surface>
+
+        <Surface mode="flat" style={surfaceStyle}>
           <List.Section style={styles.listSection}>
-            {marketEntries.map(([key, config], index) => {
-              const { quote, error } = marketState[key]
+            {marketEntries.map((entry, index) => {
+              const { quote, error } = marketState[entry.id] ?? {}
               const price = quote?.regularMarketPrice
               const change = quote?.regularMarketChange
               const changePercent = quote?.regularMarketChangePercent
@@ -153,17 +324,18 @@ export default function HomeScreen() {
                   : change > 0
                   ? positiveColor
                   : theme.colors.error
+              const isRowLoading = !quote && !error
 
               return (
-                <Fragment key={key}>
+                <Fragment key={entry.id}>
                   <List.Item
-                    title={config.label}
+                    title={entry.label}
                     titleStyle={styles.listTitle}
-                    description={quote?.symbol ?? '--'}
+                    description={quote?.symbol ?? entry.symbol ?? '--'}
                     descriptionStyle={styles.symbol}
                     right={() => (
                       <View style={styles.rightContainer}>
-                        {isInitialLoading ? (
+                        {isRowLoading ? (
                           <ActivityIndicator animating color={theme.colors.primary} />
                         ) : error ? (
                           <HelperText type="error" visible style={styles.errorText}>
@@ -172,11 +344,11 @@ export default function HomeScreen() {
                         ) : (
                           <>
                             <Text variant="titleMedium" style={styles.price}>
-                              {formatNumber(price, config.fractionDigits)}
+                              {formatNumber(price, entry.fractionDigits)}
                               {currency ? ` ${currency}` : ''}
                             </Text>
                             <Text variant="bodyMedium" style={[styles.change, { color: changeColor }]}>
-                              {formatChangeText(change, changePercent, config.fractionDigits)}
+                              {formatChangeText(change, changePercent, entry.fractionDigits)}
                             </Text>
                           </>
                         )}
@@ -208,6 +380,19 @@ const styles = StyleSheet.create({
   sectionSurface: {
     borderRadius: 16,
     overflow: 'hidden',
+  },
+  searchContainer: {
+    padding: 16,
+    gap: 8,
+  },
+  searchListSection: {
+    margin: 0,
+    paddingVertical: 0,
+  },
+  searchEmptyText: {
+    textAlign: 'center',
+    paddingVertical: 12,
+    opacity: 0.7,
   },
   listSection: {
     margin: 0,

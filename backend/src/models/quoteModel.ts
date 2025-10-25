@@ -1,4 +1,5 @@
 import type { QuoteResponse } from './types'
+import { loadYahooFinance } from './yahooFinanceClient'
 
 type DummyQuoteKey = 'nikkei' | 'topix'
 
@@ -21,3 +22,41 @@ const DUMMY_QUOTES: Record<DummyQuoteKey, QuoteResponse> = {
 
 export const getDummyQuote = (key: DummyQuoteKey): QuoteResponse => DUMMY_QUOTES[key]
 
+export const fetchQuoteBySymbol = async (symbol: string): Promise<QuoteResponse> => {
+  const trimmed = symbol.trim()
+
+  if (!trimmed) {
+    throw new Error('symbol is required')
+  }
+
+  const yahooFinance = await loadYahooFinance()
+  const quote = await yahooFinance.quote(trimmed)
+
+  if (!quote) {
+    throw new Error(`Quote not found for symbol "${trimmed}"`)
+  }
+
+  const {
+    regularMarketPrice,
+    regularMarketChange,
+    regularMarketChangePercent,
+    regularMarketTime,
+    currency,
+  } = quote
+
+  if (regularMarketPrice === undefined || Number.isNaN(regularMarketPrice)) {
+    throw new Error(`Quote not available for symbol "${trimmed}"`)
+  }
+
+  return {
+    symbol: quote.symbol ?? trimmed.toUpperCase(),
+    regularMarketPrice,
+    regularMarketChange,
+    regularMarketChangePercent,
+    regularMarketTime:
+      typeof regularMarketTime === 'number' && Number.isFinite(regularMarketTime)
+        ? Math.trunc(regularMarketTime)
+        : undefined,
+    currency,
+  }
+}

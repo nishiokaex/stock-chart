@@ -3,6 +3,7 @@ import type { Hono } from 'hono'
 import { getRoot } from './controllers/healthController'
 import {
   getNikkeiQuote,
+  getQuoteBySymbol,
   getStockOhlcv,
   getTopixQuote,
   getUsdJpyQuote,
@@ -15,6 +16,7 @@ export const registerRoutes = (app: Hono) => {
   app.get('/api/topix', getTopixQuote)
   app.get('/api/usdjpy', getUsdJpyQuote)
   app.get('/api/stocks', getStockOhlcv)
+  app.get('/api/quote', getQuoteBySymbol)
   app.get('/api/symbol', searchSymbolController)
 
   return app

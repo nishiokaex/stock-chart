@@ -2,7 +2,7 @@ import type { Context } from 'hono'
 
 import { fetchDailyOhlcv } from '../models/ohlcvModel'
 import { fetchUsdJpyQuote } from '../models/forexModel'
-import { getDummyQuote } from '../models/quoteModel'
+import { fetchQuoteBySymbol, getDummyQuote } from '../models/quoteModel'
 import { renderError, renderQuote, renderStocksResponse } from '../views/quoteView'
 import { nowInSeconds } from '../utils/time'
 
@@ -54,3 +54,20 @@ export const getStockOhlcv = async (c: Context) => {
   }
 }
 
+export const getQuoteBySymbol = async (c: Context) => {
+  const symbol = c.req.query('symbol')?.trim()
+
+  if (!symbol) {
+    return c.json(renderError('symbol クエリパラメーターは必須です'), 400)
+  }
+
+  try {
+    const quote = await fetchQuoteBySymbol(symbol)
+    return c.json(renderQuote(quote))
+  } catch (error) {
+    console.error(error)
+    const message = error instanceof Error ? error.message : 'Unexpected error'
+    const isNotFound = /not (found|available)/i.test(message)
+    return c.json(renderError(message), isNotFound ? 404 : 500)
+  }
+}
