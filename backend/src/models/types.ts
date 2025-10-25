@@ -32,3 +32,7 @@ export type OhlcvItem = {
   volume: number
 }
 
+export type StockMasterItem = {
+  symbol: string
+  name: string
+}
