@@ -1,15 +1,15 @@
 import stocksCsv from '../assets/stocks.csv'
 
-import type { StockMasterItem } from './types'
+import type { SymbolMasterItem } from './types'
 
-type SearchableStock = StockMasterItem & {
+type SearchableSymbol = SymbolMasterItem & {
   symbolLower: string
   nameLower: string
 }
 
 const trimLine = (line: string) => line.trim()
 
-const parseStocksCsv = (csv: string): SearchableStock[] =>
+const parseSymbolsCsv = (csv: string): SearchableSymbol[] =>
   csv
     .split(/\r?\n/)
     .map(trimLine)
@@ -28,22 +28,22 @@ const parseStocksCsv = (csv: string): SearchableStock[] =>
     })
     .filter((item) => item.symbol && item.name)
 
-const stocks = parseStocksCsv(stocksCsv)
+const symbols = parseSymbolsCsv(stocksCsv)
 
 const normalize = (value: string) => value.trim().toLowerCase()
 
-export const searchStocks = (keyword: string): StockMasterItem[] => {
+export const searchSymbols = (keyword: string): SymbolMasterItem[] => {
   const normalized = normalize(keyword)
 
   if (!normalized) {
     return []
   }
 
-  return stocks
+  return symbols
     .filter(
-      (stock) =>
-        stock.symbolLower.includes(normalized) ||
-        stock.nameLower.includes(normalized),
+      (symbol) =>
+        symbol.symbolLower.includes(normalized) ||
+        symbol.nameLower.includes(normalized),
     )
     .map(({ symbol, name }) => ({ symbol, name }))
 }

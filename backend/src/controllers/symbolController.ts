@@ -1,8 +1,8 @@
 import type { Context } from 'hono'
 
-import { searchStocks } from '../models/stocksModel'
+import { searchSymbols } from '../models/symbolsModel'
 import { renderError } from '../views/quoteView'
-import { renderStockSearchResponse } from '../views/stocksView'
+import { renderSymbolSearchResponse } from '../views/symbolView'
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PER_PAGE = 50
@@ -17,7 +17,7 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-export const searchStocksController = (c: Context) => {
+export const searchSymbolController = (c: Context) => {
   const keyword = c.req.query('q')?.trim()
 
   if (!keyword) {
@@ -31,14 +31,14 @@ export const searchStocksController = (c: Context) => {
   )
   const perPage = Math.min(requestedPerPage, MAX_PER_PAGE)
 
-  const matches = searchStocks(keyword)
+  const matches = searchSymbols(keyword)
   const total = matches.length
   const totalPages = total === 0 ? 0 : Math.ceil(total / perPage)
   const start = (page - 1) * perPage
   const items = start >= total ? [] : matches.slice(start, start + perPage)
 
   return c.json(
-    renderStockSearchResponse({
+    renderSymbolSearchResponse({
       query: keyword,
       total,
       page,

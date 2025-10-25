@@ -7,7 +7,7 @@ import {
   getTopixQuote,
   getUsdJpyQuote,
 } from './controllers/quoteController'
-import { searchStocksController } from './controllers/stocksController'
+import { searchSymbolController } from './controllers/symbolController'
 
 export const registerRoutes = (app: Hono) => {
   app.get('/', getRoot)
@@ -15,7 +15,7 @@ export const registerRoutes = (app: Hono) => {
   app.get('/api/topix', getTopixQuote)
   app.get('/api/usdjpy', getUsdJpyQuote)
   app.get('/api/stocks', getStockOhlcv)
-  app.get('/api/stocks/search', searchStocksController)
+  app.get('/api/symbol', searchSymbolController)
 
   return app
 }
