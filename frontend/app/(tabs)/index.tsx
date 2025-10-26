@@ -31,49 +31,28 @@ type MarketEntry = {
   path: string
   fractionDigits: number
   symbol?: string
-  type: 'builtin' | 'custom'
 }
 
 type MarketState = Record<string, { quote?: MarketQuote; error?: string }>
 
-const buildQuotePath = (symbol: string) => `/api/quote?symbol=${encodeURIComponent(symbol)}`
-
-const DEFAULT_MARKETS: MarketEntry[] = [
-  {
-    id: 'builtin:topix',
-    label: 'TOPIX',
-    path: buildQuotePath('TSE:TOPIX'),
-    fractionDigits: 2,
-    symbol: 'TSE:TOPIX',
-    type: 'builtin',
-  },
-  {
-    id: 'builtin:usdjpy',
-    label: 'ドル円',
-    path: buildQuotePath('USDJPY'),
-    fractionDigits: 3,
-    symbol: 'USDJPY',
-    type: 'builtin',
-  },
-]
-
 const SEARCH_DEBOUNCE_MS = 300
 const CUSTOM_SYMBOL_FRACTION_DIGITS = 2
 
-const buildCustomEntries = (symbols: StoredCustomSymbol[]): MarketEntry[] =>
+const buildQuotePath = (symbol: string) => `/api/quote?symbol=${encodeURIComponent(symbol)}`
+
+const DEFAULT_SYMBOLS: StoredCustomSymbol[] = [
+  { symbol: 'TSE:TOPIX', label: 'TOPIX' },
+  { symbol: 'USDJPY', label: 'ドル円' },
+]
+
+const buildMarketEntries = (symbols: StoredCustomSymbol[]): MarketEntry[] =>
   symbols.map((item) => ({
     id: `custom:${item.symbol}`,
     label: item.label || item.symbol,
     path: buildQuotePath(item.symbol),
     fractionDigits: CUSTOM_SYMBOL_FRACTION_DIGITS,
     symbol: item.symbol,
-    type: 'custom',
   }))
-
-const buildAllEntries = (symbols: StoredCustomSymbol[]) => [
-  ...DEFAULT_MARKETS,
-  ...buildCustomEntries(symbols),
-]
 
 const formatNumber = (value: number | undefined, maximumFractionDigits: number) => {
   if (value === undefined || Number.isNaN(value)) {
@@ -112,22 +91,28 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const load = async () => {
-      const stored = await loadCustomSymbols()
-      setCustomSymbols(stored)
+      try {
+        const stored = await loadCustomSymbols()
+        if (!stored || stored.length === 0) {
+          setCustomSymbols(DEFAULT_SYMBOLS)
+          try {
+            await saveCustomSymbols(DEFAULT_SYMBOLS)
+          } catch (error) {
+            console.error('[market] 初期シンボルの保存に失敗しました', error)
+          }
+        } else {
+          setCustomSymbols(stored)
+        }
+      } catch (error) {
+        console.error('[market] シンボルの読み込みに失敗しました', error)
+        setCustomSymbols(DEFAULT_SYMBOLS)
+      }
     }
-    load()
+    void load()
   }, [])
 
-  const marketEntries = useMemo(() => buildAllEntries(customSymbols), [customSymbols])
-  const existingSymbols = useMemo(() => {
-    const set = new Set<string>()
-    marketEntries.forEach((entry) => {
-      if (entry.symbol) {
-        set.add(entry.symbol)
-      }
-    })
-    return set
-  }, [marketEntries])
+  const marketEntries = useMemo(() => buildMarketEntries(customSymbols), [customSymbols])
+  const existingSymbols = useMemo(() => new Set(customSymbols.map((item) => item.symbol)), [customSymbols])
 
   const fetchMarketData = useCallback(async (entries: MarketEntry[]) => {
     if (entries.length === 0) {
@@ -227,7 +212,7 @@ export default function HomeScreen() {
       setPendingSymbol(item.symbol)
       try {
         await saveCustomSymbols(nextSymbols)
-        await fetchMarketData(buildAllEntries(nextSymbols))
+        await fetchMarketData(buildMarketEntries(nextSymbols))
       } catch (error) {
         console.error('[market] カスタムシンボルの保存に失敗しました', error)
         setCustomSymbols(customSymbols)
@@ -252,7 +237,7 @@ export default function HomeScreen() {
 
       try {
         await saveCustomSymbols(nextSymbols)
-        await fetchMarketData(buildAllEntries(nextSymbols))
+        await fetchMarketData(buildMarketEntries(nextSymbols))
       } catch (error) {
         console.error('[market] カスタムシンボルの削除に失敗しました', error)
         setCustomSymbols(prevSymbols)
@@ -376,32 +361,26 @@ export default function HomeScreen() {
                   />
               )
 
-              const isCustomEntry = entry.type === 'custom' && entry.symbol
-
               return (
                 <Fragment key={entry.id}>
-                  {isCustomEntry ? (
-                    <Swipeable
-                      friction={2}
-                      rightThreshold={60}
-                      renderRightActions={() => (
-                        <RectButton
-                          style={[styles.deleteAction, { backgroundColor: deleteActionColor }]}
-                          onPress={() => {
-                            if (entry.symbol) {
-                              void handleRemoveSymbol(entry.symbol)
-                            }
-                          }}
-                        >
-                          <Text style={styles.deleteActionText}>削除</Text>
-                        </RectButton>
-                      )}
-                    >
-                      {listItem}
-                    </Swipeable>
-                  ) : (
-                    listItem
-                  )}
+                  <Swipeable
+                    friction={2}
+                    rightThreshold={60}
+                    renderRightActions={() => (
+                      <RectButton
+                        style={[styles.deleteAction, { backgroundColor: deleteActionColor }]}
+                        onPress={() => {
+                          if (entry.symbol) {
+                            void handleRemoveSymbol(entry.symbol)
+                          }
+                        }}
+                      >
+                        <Text style={styles.deleteActionText}>削除</Text>
+                      </RectButton>
+                    )}
+                  >
+                    {listItem}
+                  </Swipeable>
                   {index < marketEntries.length - 1 && <Divider inset />}
                 </Fragment>
               )
