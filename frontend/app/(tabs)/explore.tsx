@@ -1,23 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Card, HelperText, Text, useTheme } from 'react-native-paper';
-import { useLocalSearchParams } from 'expo-router';
+import { Card, HelperText, List, Searchbar, Text, useTheme } from 'react-native-paper';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AppHeader } from '@/components/app-header';
 import { InteractiveCandleChart } from '@/components/charts';
+import { buildApiUrl } from '@/lib/api/base';
 import type { ChartStyleConfig } from '@/lib/charts/style';
 import { fetchStockCandleData } from '@/lib/charts/stock-data';
 import type { Candle, TrendDefinition } from '@/lib/charts/types';
+import type { SymbolSearchItem, SymbolSearchResponse } from '@/types/symbol';
 
 const DEFAULT_SYMBOL = 'AAPL';
+const SEARCH_DEBOUNCE_MS = 300;
 const toParamValue = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
 export default function ExploreScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trendDefinitions, setTrendDefinitions] = useState<TrendDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SymbolSearchItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const { symbol: symbolParam, label: labelParam } = useLocalSearchParams<{
     symbol?: string | string[];
     label?: string | string[];
@@ -69,6 +78,50 @@ export default function ExploreScreen() {
     };
   }, [selectedSymbol]);
 
+  const performSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const { data } = await axios.get<SymbolSearchResponse>(
+        buildApiUrl(`/api/symbol?q=${encodeURIComponent(trimmed)}&per_page=10`),
+      );
+      setSearchResults(data.items ?? []);
+    } catch (err) {
+      console.error('[chart] シンボル検索に失敗しました', err);
+      setSearchResults([]);
+      setSearchError('検索に失敗しました。時間をおいて再度お試しください。');
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      void performSearch(searchQuery);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handler);
+  }, [performSearch, searchQuery]);
+
+  const handleSelectSymbol = useCallback(
+    (item: SymbolSearchItem) => {
+      router.setParams({
+        symbol: item.symbol,
+        label: item.name || item.symbol,
+      });
+      setSearchQuery('');
+      setSearchResults([]);
+      setSearchError(null);
+    },
+    [router],
+  );
+
   const latestCandle = useMemo(() => (candles.length > 0 ? candles[candles.length - 1] : undefined), [candles]);
   const chartStyle = useMemo<ChartStyleConfig>(
     () => ({
@@ -83,6 +136,7 @@ export default function ExploreScreen() {
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }];
   const contentStyle = [styles.content, { backgroundColor: theme.colors.background }];
+  const hasQuery = Boolean(searchQuery.trim());
 
   return (
     <View style={screenStyle}>
@@ -94,6 +148,47 @@ export default function ExploreScreen() {
         <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
           銘柄コード: {selectedSymbol} / 終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
         </Text>
+        <View style={styles.searchContainer}>
+          <Searchbar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="シンボルを検索"
+            autoCorrect={false}
+            autoCapitalize="characters"
+          />
+          {searchError ? (
+            <HelperText type="error" visible style={styles.searchErrorText}>
+              {searchError}
+            </HelperText>
+          ) : null}
+          {hasQuery ? (
+            <Card mode="outlined" style={styles.searchResultsCard}>
+              {isSearching ? (
+                <View style={styles.searchLoadingContainer}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                </View>
+              ) : searchResults.length === 0 ? (
+                <Text variant="bodyMedium" style={styles.searchEmptyText}>
+                  該当するシンボルがありません。
+                </Text>
+              ) : (
+                <List.Section>
+                  {searchResults.map((item, index) => (
+                    <Fragment key={item.symbol}>
+                      <List.Item
+                        title={item.symbol}
+                        description={item.name}
+                        onPress={() => handleSelectSymbol(item)}
+                        right={() => <List.Icon icon="chart-line" />}
+                      />
+                      {index < searchResults.length - 1 ? <View style={styles.searchDivider} /> : null}
+                    </Fragment>
+                  ))}
+                </List.Section>
+              )}
+            </Card>
+          ) : null}
+        </View>
         {error ? (
           <HelperText type="error" visible style={styles.errorText}>
             {error}
@@ -156,6 +251,29 @@ const styles = StyleSheet.create({
   subtitleText: {
     fontWeight: '600',
   },
+  searchContainer: {
+    width: '100%',
+    gap: 8,
+  },
+  searchResultsCard: {
+    borderRadius: 12,
+    paddingVertical: 4,
+  },
+  searchLoadingContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchEmptyText: {
+    textAlign: 'center',
+    paddingVertical: 12,
+    opacity: 0.7,
+  },
+  searchDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
   card: {
     borderRadius: 16,
     flex: 1,
@@ -177,6 +295,9 @@ const styles = StyleSheet.create({
   errorText: {
     marginVertical: -4,
     paddingHorizontal: 0,
+  },
+  searchErrorText: {
+    marginTop: -4,
   },
   errorMessage: {
     textAlign: 'center',
