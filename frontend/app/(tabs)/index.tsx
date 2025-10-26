@@ -2,6 +2,7 @@ import axios from 'axios'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 
+import { useRouter } from 'expo-router'
 import { RectButton, Swipeable } from 'react-native-gesture-handler'
 
 import { AppHeader } from '@/components/app-header'
@@ -79,6 +80,7 @@ const formatChangeText = (
 }
 
 export default function HomeScreen() {
+  const router = useRouter()
   const theme = useTheme()
   const [marketState, setMarketState] = useState<MarketState>({})
   const [customSymbols, setCustomSymbols] = useState<StoredCustomSymbol[]>([])
@@ -247,6 +249,23 @@ export default function HomeScreen() {
     [customSymbols, fetchMarketData],
   )
 
+  const handleNavigateToChart = useCallback(
+    (entry: MarketEntry) => {
+      if (!entry.symbol) {
+        return
+      }
+
+      router.push({
+        pathname: '/(tabs)/explore',
+        params: {
+          symbol: entry.symbol,
+          label: entry.label,
+        },
+      })
+    },
+    [router],
+  )
+
   const hasQuery = Boolean(searchQuery.trim())
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }]
@@ -333,32 +352,33 @@ export default function HomeScreen() {
 
               const listItem = (
                 <List.Item
-                    title={entry.label}
-                    titleStyle={styles.listTitle}
-                    description={quote?.symbol ?? entry.symbol ?? '--'}
-                    descriptionStyle={styles.symbol}
-                    right={() => (
-                      <View style={styles.rightContainer}>
-                        {isRowLoading ? (
-                          <ActivityIndicator animating color={theme.colors.primary} />
-                        ) : error ? (
-                          <HelperText type="error" visible style={styles.errorText}>
-                            {error}
-                          </HelperText>
-                        ) : (
-                          <>
-                            <Text variant="titleMedium" style={styles.price}>
-                              {formatNumber(price, entry.fractionDigits)}
-                              {currency ? ` ${currency}` : ''}
-                            </Text>
-                            <Text variant="bodyMedium" style={[styles.change, { color: changeColor }]}>
-                              {formatChangeText(change, changePercent, entry.fractionDigits)}
-                            </Text>
-                          </>
-                        )}
-                      </View>
-                    )}
-                  />
+                  title={entry.label}
+                  titleStyle={styles.listTitle}
+                  description={quote?.symbol ?? entry.symbol ?? '--'}
+                  descriptionStyle={styles.symbol}
+                  onPress={entry.symbol ? () => handleNavigateToChart(entry) : undefined}
+                  right={() => (
+                    <View style={styles.rightContainer}>
+                      {isRowLoading ? (
+                        <ActivityIndicator animating color={theme.colors.primary} />
+                      ) : error ? (
+                        <HelperText type="error" visible style={styles.errorText}>
+                          {error}
+                        </HelperText>
+                      ) : (
+                        <>
+                          <Text variant="titleMedium" style={styles.price}>
+                            {formatNumber(price, entry.fractionDigits)}
+                            {currency ? ` ${currency}` : ''}
+                          </Text>
+                          <Text variant="bodyMedium" style={[styles.change, { color: changeColor }]}>
+                            {formatChangeText(change, changePercent, entry.fractionDigits)}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  )}
+                />
               )
 
               return (

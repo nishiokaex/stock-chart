@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Card, HelperText, Text, useTheme } from 'react-native-paper';
+import { useLocalSearchParams } from 'expo-router';
 
 import { AppHeader } from '@/components/app-header';
 import { InteractiveCandleChart } from '@/components/charts';
@@ -8,29 +9,53 @@ import type { ChartStyleConfig } from '@/lib/charts/style';
 import { fetchStockCandleData } from '@/lib/charts/stock-data';
 import type { Candle, TrendDefinition } from '@/lib/charts/types';
 
+const DEFAULT_SYMBOL = 'AAPL';
+const toParamValue = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
+
 export default function ExploreScreen() {
   const theme = useTheme();
   const [candles, setCandles] = useState<Candle[]>([]);
   const [trendDefinitions, setTrendDefinitions] = useState<TrendDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { symbol: symbolParam, label: labelParam } = useLocalSearchParams<{
+    symbol?: string | string[];
+    label?: string | string[];
+  }>();
+
+  const selectedSymbol = useMemo(() => {
+    const raw = toParamValue(symbolParam)?.trim();
+    return raw && raw.length > 0 ? raw : DEFAULT_SYMBOL;
+  }, [symbolParam]);
+
+  const selectedLabel = useMemo(() => {
+    const raw = toParamValue(labelParam)?.trim();
+    return raw && raw.length > 0 ? raw : undefined;
+  }, [labelParam]);
+
+  const displayTitle = selectedLabel ?? selectedSymbol;
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setCandles([]);
+    setTrendDefinitions([]);
+
     const load = async () => {
       try {
-        const data = await fetchStockCandleData('AAPL');
+        const data = await fetchStockCandleData(selectedSymbol);
         if (!cancelled) {
           setCandles(data.candles);
           setTrendDefinitions(data.trendDefinitions);
           setError(null);
         }
       } catch (err) {
-        console.error(err);
+        console.error('[chart] failed to load candles', err);
         if (!cancelled) {
           setCandles([]);
           setTrendDefinitions([]);
-          setError('データの取得に失敗しました。');
+          setError(`${selectedSymbol} のデータの取得に失敗しました。`);
         }
       } finally {
         if (!cancelled) {
@@ -38,11 +63,11 @@ export default function ExploreScreen() {
         }
       }
     };
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedSymbol]);
 
   const latestCandle = useMemo(() => (candles.length > 0 ? candles[candles.length - 1] : undefined), [candles]);
   const chartStyle = useMemo<ChartStyleConfig>(
@@ -64,10 +89,10 @@ export default function ExploreScreen() {
       <AppHeader title="チャート" />
       <View style={contentStyle}>
         <Text variant="headlineMedium" style={styles.title}>
-          AAPL 株価チャート
+          {displayTitle} 株価チャート
         </Text>
         <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
-          終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
+          銘柄コード: {selectedSymbol} / 終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
         </Text>
         {error ? (
           <HelperText type="error" visible style={styles.errorText}>
