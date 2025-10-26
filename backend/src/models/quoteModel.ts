@@ -1,4 +1,6 @@
+import { nowInSeconds } from '../utils/time'
 import type { QuoteResponse } from './types'
+import { fetchUsdJpyQuote } from './forexModel'
 import { loadYahooFinance } from './yahooFinanceClient'
 
 type DummyQuoteKey = 'nikkei' | 'topix'
@@ -22,11 +24,26 @@ const DUMMY_QUOTES: Record<DummyQuoteKey, QuoteResponse> = {
 
 export const getDummyQuote = (key: DummyQuoteKey): QuoteResponse => DUMMY_QUOTES[key]
 
+const SYMBOL_OVERRIDES: Record<string, () => Promise<QuoteResponse>> = {
+  USDJPY: fetchUsdJpyQuote,
+  'TSE:TOPIX': async () => ({
+    ...getDummyQuote('topix'),
+    symbol: 'TSE:TOPIX',
+    regularMarketTime: nowInSeconds(),
+  }),
+}
+
 export const fetchQuoteBySymbol = async (symbol: string): Promise<QuoteResponse> => {
   const trimmed = symbol.trim()
 
   if (!trimmed) {
     throw new Error('symbol is required')
+  }
+
+  const normalized = trimmed.toUpperCase()
+  const override = SYMBOL_OVERRIDES[normalized]
+  if (override) {
+    return override()
   }
 
   const yahooFinance = await loadYahooFinance()
@@ -49,7 +66,7 @@ export const fetchQuoteBySymbol = async (symbol: string): Promise<QuoteResponse>
   }
 
   return {
-    symbol: quote.symbol ?? trimmed.toUpperCase(),
+    symbol: quote.symbol ?? normalized,
     regularMarketPrice,
     regularMarketChange,
     regularMarketChangePercent,

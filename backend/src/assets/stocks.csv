@@ -4605,6 +4605,7 @@ TSEM|Tower Semiconductor Ltd. - Ordinary Shares|Q|N|N|100|N|N
 TSHA|Taysha Gene Therapies, Inc. - Common Stock|Q|N|N|100|N|N
 TSL|GraniteShares 1.25x Long TSLA Daily ETF|G|N|N|100|Y|N
 TSLA|Tesla, Inc.  - Common Stock|Q|N|N|100|N|N
+TSE:TOPIX|TOPIX|G|N|N|100|N|N
 TSLG|Leverage Shares 2X Long TSLA Daily ETF|G|N|N|100|Y|N
 TSLL|Direxion Daily TSLA Bull 2X Shares|G|N|N|100|Y|N
 TSLQ|Tradr 2X Short TSLA Daily ETF|G|N|N|100|Y|N
@@ -11314,6 +11315,7 @@ USBC|USBC, Inc. Common Stock|A|USBC|N|100|N|USBC
 USCA|DBX ETF Trust Xtrackers MSCI USA Climate Action Equity ETF|P|USCA|Y|100|N|USCA
 USCI|United States Commodity Index Fund ETV|P|USCI|Y|100|N|USCI
 USD|ProShares Ultra Semiconductors|P|USD|Y|100|N|USD
+USDJPY|ドル円|G|N|N|100|N|N
 USDU|WisdomTree Bloomberg U.S. Dollar Bullish Fund|P|USDU|Y|100|N|USDU
 USE|USCF ETF Trust USCF Energy Commodity Strategy Absolute Return Fund|P|USE|Y|100|N|USE
 USEP|Innovator U.S. Equity Ultra Buffer ETF - September|Z|USEP|Y|100|N|USEP

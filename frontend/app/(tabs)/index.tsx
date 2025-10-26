@@ -36,27 +36,21 @@ type MarketEntry = {
 
 type MarketState = Record<string, { quote?: MarketQuote; error?: string }>
 
+const buildQuotePath = (symbol: string) => `/api/quote?symbol=${encodeURIComponent(symbol)}`
+
 const DEFAULT_MARKETS: MarketEntry[] = [
-  {
-    id: 'builtin:nikkei',
-    label: '日経平均',
-    path: '/api/nikkei',
-    fractionDigits: 2,
-    symbol: '^N225',
-    type: 'builtin',
-  },
   {
     id: 'builtin:topix',
     label: 'TOPIX',
-    path: '/api/topix',
+    path: buildQuotePath('TSE:TOPIX'),
     fractionDigits: 2,
-    symbol: '^TOPX',
+    symbol: 'TSE:TOPIX',
     type: 'builtin',
   },
   {
     id: 'builtin:usdjpy',
     label: 'ドル円',
-    path: '/api/usdjpy',
+    path: buildQuotePath('USDJPY'),
     fractionDigits: 3,
     symbol: 'USDJPY',
     type: 'builtin',
@@ -70,7 +64,7 @@ const buildCustomEntries = (symbols: StoredCustomSymbol[]): MarketEntry[] =>
   symbols.map((item) => ({
     id: `custom:${item.symbol}`,
     label: item.label || item.symbol,
-    path: `/api/quote?symbol=${encodeURIComponent(item.symbol)}`,
+    path: buildQuotePath(item.symbol),
     fractionDigits: CUSTOM_SYMBOL_FRACTION_DIGITS,
     symbol: item.symbol,
     type: 'custom',
