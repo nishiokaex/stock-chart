@@ -5,6 +5,17 @@ export const lightTheme: MD3Theme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
+    background: '#ffffff',
+    surface: '#ffffff',
+    surfaceVariant: '#f5f5f5',
+    onSurface: 'rgba(0, 0, 0, 0.87)',
+    onSurfaceVariant: 'rgba(0, 0, 0, 0.6)',
+    onSurfaceDisabled: 'rgba(0, 0, 0, 0.38)',
+    surfaceDisabled: 'rgba(0, 0, 0, 0.12)',
+    outline: 'rgba(0, 0, 0, 0.12)',
+    outlineVariant: 'rgba(0, 0, 0, 0.12)',
+    inverseSurface: '#121212',
+    inverseOnSurface: '#ffffff',
   },
 };
 
@@ -12,6 +23,17 @@ export const darkTheme: MD3Theme = {
   ...MD3DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,
+    background: '#121212',
+    surface: '#121212',
+    surfaceVariant: '#1e1e1e',
+    onSurface: '#ffffff',
+    onSurfaceVariant: 'rgba(255, 255, 255, 0.7)',
+    onSurfaceDisabled: 'rgba(255, 255, 255, 0.5)',
+    surfaceDisabled: 'rgba(255, 255, 255, 0.12)',
+    outline: 'rgba(255, 255, 255, 0.12)',
+    outlineVariant: 'rgba(255, 255, 255, 0.12)',
+    inverseSurface: '#ffffff',
+    inverseOnSurface: '#121212',
   },
 };
 

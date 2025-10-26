@@ -18,7 +18,7 @@ export function AppHeader({ title, subtitle, actions }: AppHeaderProps) {
       statusBarHeight={insets.top}
       mode="center-aligned"
       elevated
-      style={[styles.header, { backgroundColor: theme.colors.elevation.level2 }]}
+      style={[styles.header, { backgroundColor: theme.colors.background }]}
     >
       <Appbar.Content title={title} subtitle={subtitle} />
       {actions}
