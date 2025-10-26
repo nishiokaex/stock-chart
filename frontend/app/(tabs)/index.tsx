@@ -2,6 +2,8 @@ import axios from 'axios'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 
+import { RectButton, Swipeable } from 'react-native-gesture-handler'
+
 import { AppHeader } from '@/components/app-header'
 import {
   ActivityIndicator,
@@ -243,12 +245,36 @@ export default function HomeScreen() {
     [customSymbols, existingSymbols, fetchMarketData],
   )
 
+  const handleRemoveSymbol = useCallback(
+    async (symbol: string) => {
+      const prevSymbols = customSymbols
+      const nextSymbols = customSymbols.filter((item) => item.symbol !== symbol)
+
+      if (nextSymbols.length === prevSymbols.length) {
+        return
+      }
+
+      setCustomSymbols(nextSymbols)
+
+      try {
+        await saveCustomSymbols(nextSymbols)
+        await fetchMarketData(buildAllEntries(nextSymbols))
+      } catch (error) {
+        console.error('[market] カスタムシンボルの削除に失敗しました', error)
+        setCustomSymbols(prevSymbols)
+        setSearchError('シンボルの削除に失敗しました。もう一度お試しください。')
+      }
+    },
+    [customSymbols, fetchMarketData],
+  )
+
   const hasQuery = Boolean(searchQuery.trim())
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }]
   const scrollStyle = [styles.scroll, { backgroundColor: theme.colors.background }]
   const surfaceStyle = [styles.sectionSurface, { backgroundColor: theme.colors.surface }]
   const positiveColor = theme.colors.tertiary ?? '#16a34a'
+  const deleteActionColor = theme.colors.error
 
   return (
     <View style={screenStyle}>
@@ -326,9 +352,8 @@ export default function HomeScreen() {
                   : theme.colors.error
               const isRowLoading = !quote && !error
 
-              return (
-                <Fragment key={entry.id}>
-                  <List.Item
+              const listItem = (
+                <List.Item
                     title={entry.label}
                     titleStyle={styles.listTitle}
                     description={quote?.symbol ?? entry.symbol ?? '--'}
@@ -355,6 +380,34 @@ export default function HomeScreen() {
                       </View>
                     )}
                   />
+              )
+
+              const isCustomEntry = entry.type === 'custom' && entry.symbol
+
+              return (
+                <Fragment key={entry.id}>
+                  {isCustomEntry ? (
+                    <Swipeable
+                      friction={2}
+                      rightThreshold={60}
+                      renderRightActions={() => (
+                        <RectButton
+                          style={[styles.deleteAction, { backgroundColor: deleteActionColor }]}
+                          onPress={() => {
+                            if (entry.symbol) {
+                              void handleRemoveSymbol(entry.symbol)
+                            }
+                          }}
+                        >
+                          <Text style={styles.deleteActionText}>削除</Text>
+                        </RectButton>
+                      )}
+                    >
+                      {listItem}
+                    </Swipeable>
+                  ) : (
+                    listItem
+                  )}
                   {index < marketEntries.length - 1 && <Divider inset />}
                 </Fragment>
               )
@@ -419,5 +472,14 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginHorizontal: 0,
     paddingHorizontal: 0,
+  },
+  deleteAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 96,
+  },
+  deleteActionText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 })
