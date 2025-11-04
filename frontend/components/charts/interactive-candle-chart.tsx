@@ -779,7 +779,6 @@ const PriceAndVolumeLayer: React.FC<PriceAndVolumeLayerProps> = ({
                 y2={priceMapper(close)}
                 stroke={color}
                 strokeWidth={thickWidth}
-                strokeLinecap="round"
               />
             )}
             {high != null && low != null && (
@@ -790,7 +789,6 @@ const PriceAndVolumeLayer: React.FC<PriceAndVolumeLayerProps> = ({
                 y2={priceMapper(low)}
                 stroke={color}
                 strokeWidth={thinWidth}
-                strokeLinecap="round"
               />
             )}
             {candle.volume != null && (
@@ -801,7 +799,6 @@ const PriceAndVolumeLayer: React.FC<PriceAndVolumeLayerProps> = ({
                 y2={volumeMapper(candle.volume)}
                 stroke={style.volumeColor}
                 strokeWidth={thickWidth}
-                strokeLinecap="round"
               />
             )}
           </React.Fragment>
