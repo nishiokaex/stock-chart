@@ -19,13 +19,14 @@ type StocksApiResponse = {
   data?: OhlcvResponse[]
 }
 
-export type IndicatorGroup = 'movingAverage' | 'rsi' | 'macd'
+export type IndicatorGroup = 'movingAverage' | 'rsi' | 'macd' | 'comparison'
 
 export interface IndicatorSeries {
   id: string
   label: string
   group: IndicatorGroup
   values: (number | null)[]
+  color?: string
 }
 
 export interface StockCandleData {

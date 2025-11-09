@@ -5,7 +5,6 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { RectButton, Swipeable } from 'react-native-gesture-handler'
 
-import { AppHeader } from '@/components/app-header'
 import {
   ActivityIndicator,
   Button,
@@ -276,7 +275,6 @@ export default function HomeScreen() {
 
   return (
     <View style={screenStyle}>
-      <AppHeader title="マーケット" />
       <ScrollView
         style={scrollStyle}
         contentContainerStyle={styles.scrollContent}

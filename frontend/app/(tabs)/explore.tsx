@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Card, Chip, HelperText, List, Searchbar, Text, useTheme } from 'react-native-paper';
+import { Card, Chip, HelperText, IconButton, List, Searchbar, Text, useTheme } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { AppHeader } from '@/components/app-header';
 import { IndicatorMiniChart, InteractiveCandleChart } from '@/components/charts';
 import type { IndicatorReferenceLine } from '@/components/charts';
 import { buildApiUrl } from '@/lib/api/base';
@@ -17,6 +16,8 @@ import type { SymbolSearchItem, SymbolSearchResponse } from '@/types/symbol';
 const DEFAULT_SYMBOL = 'AAPL';
 const SEARCH_DEBOUNCE_MS = 300;
 const INITIAL_VISIBLE_CANDLE_COUNT = 180;
+const MAX_COMPARISON_SYMBOLS = 4;
+const COMPARISON_COLORS = ['#FFB74D', '#4FC3F7', '#9575CD', '#FF8A65', '#81C784'];
 const toParamValue = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
 type IndicatorToggleKey = 'movingAverage' | 'rsi' | 'macd';
@@ -27,11 +28,21 @@ const INDICATOR_TOGGLES: { key: IndicatorToggleKey; label: string }[] = [
   { key: 'macd', label: 'MACD' },
 ];
 
+interface ComparisonSymbolEntry {
+  symbol: string;
+  label: string;
+  color: string;
+  candles: Candle[];
+  loading: boolean;
+  error: string | null;
+}
+
 export default function ExploreScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [baseCandles, setBaseCandles] = useState<Candle[]>([]);
   const [indicatorSeries, setIndicatorSeries] = useState<IndicatorSeries[]>([]);
+  const [comparisonSymbols, setComparisonSymbols] = useState<ComparisonSymbolEntry[]>([]);
   const [indicatorVisibility, setIndicatorVisibility] = useState<Record<IndicatorToggleKey, boolean>>({
     movingAverage: true,
     rsi: false,
@@ -43,6 +54,7 @@ export default function ExploreScreen() {
   const [searchResults, setSearchResults] = useState<SymbolSearchItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [comparisonMessage, setComparisonMessage] = useState<string | null>(null);
   const { symbol: symbolParam, label: labelParam } = useLocalSearchParams<{
     symbol?: string | string[];
     label?: string | string[];
@@ -94,6 +106,18 @@ export default function ExploreScreen() {
     };
   }, [selectedSymbol]);
 
+  useEffect(() => {
+    setComparisonSymbols((prev) => prev.filter((entry) => entry.symbol !== selectedSymbol));
+  }, [selectedSymbol]);
+
+  useEffect(() => {
+    if (!comparisonMessage) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setComparisonMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [comparisonMessage]);
+
   const performSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) {
@@ -125,6 +149,88 @@ export default function ExploreScreen() {
     return () => clearTimeout(handler);
   }, [performSearch, searchQuery]);
 
+  const fetchComparisonCandles = useCallback(async (symbol: string) => {
+    setComparisonSymbols((prev) =>
+      prev.map((entry) =>
+        entry.symbol === symbol
+          ? {
+              ...entry,
+              loading: true,
+              error: null,
+            }
+          : entry,
+      ),
+    );
+
+    try {
+      const data = await fetchStockCandleData(symbol);
+      setComparisonSymbols((prev) =>
+        prev.map((entry) =>
+          entry.symbol === symbol
+            ? {
+                ...entry,
+                candles: data.candles,
+                loading: false,
+                error: null,
+              }
+            : entry,
+        ),
+      );
+    } catch (err) {
+      console.error('[comparison] failed to load candles', err);
+      setComparisonSymbols((prev) =>
+        prev.map((entry) =>
+          entry.symbol === symbol
+            ? {
+                ...entry,
+                candles: [],
+                loading: false,
+                error: `${symbol} のデータの取得に失敗しました。`,
+              }
+            : entry,
+        ),
+      );
+    }
+  }, []);
+
+  const handleAddComparisonSymbol = useCallback(
+    (item: SymbolSearchItem) => {
+      const symbol = item.symbol?.trim();
+      if (!symbol) {
+        return;
+      }
+      if (symbol === selectedSymbol) {
+        setComparisonMessage('表示中の銘柄は比較に追加できません。');
+        return;
+      }
+      if (comparisonSymbols.some((entry) => entry.symbol === symbol)) {
+        setComparisonMessage('すでに比較に追加されています。');
+        return;
+      }
+      if (comparisonSymbols.length >= MAX_COMPARISON_SYMBOLS) {
+        setComparisonMessage(`比較は最大 ${MAX_COMPARISON_SYMBOLS} 銘柄までです。`);
+        return;
+      }
+      const label = item.name?.trim();
+      const nextEntry: ComparisonSymbolEntry = {
+        symbol,
+        label: label && label.length > 0 ? label : symbol,
+        color: pickComparisonColor(comparisonSymbols),
+        candles: [],
+        loading: true,
+        error: null,
+      };
+      setComparisonSymbols((prev) => [...prev, nextEntry]);
+      void fetchComparisonCandles(symbol);
+      setComparisonMessage('比較銘柄を追加しました。');
+    },
+    [comparisonSymbols, fetchComparisonCandles, selectedSymbol],
+  );
+
+  const handleRemoveComparisonSymbol = useCallback((symbol: string) => {
+    setComparisonSymbols((prev) => prev.filter((entry) => entry.symbol !== symbol));
+  }, []);
+
   const movingAverageSeries = useMemo(
     () => indicatorSeries.filter((item) => item.group === 'movingAverage'),
     [indicatorSeries],
@@ -137,16 +243,6 @@ export default function ExploreScreen() {
     () => indicatorSeries.filter((item) => item.group === 'macd'),
     [indicatorSeries],
   );
-
-  const chartData = useMemo(() => {
-    if (!indicatorVisibility.movingAverage || movingAverageSeries.length === 0) {
-      return { candles: baseCandles, trendDefinitions: [] as TrendDefinition[] };
-    }
-    return mergeCandlesWithIndicators(baseCandles, movingAverageSeries);
-  }, [baseCandles, indicatorVisibility.movingAverage, movingAverageSeries]);
-
-  const chartCandles = chartData.candles;
-  const trendDefinitions = chartData.trendDefinitions;
 
   const hasIndicatorData = useCallback(
     (key: IndicatorToggleKey) => indicatorSeries.some((item) => item.group === key),
@@ -173,20 +269,6 @@ export default function ExploreScreen() {
     [router],
   );
 
-  const latestCandle = useMemo(
-    () => (baseCandles.length > 0 ? baseCandles[baseCandles.length - 1] : undefined),
-    [baseCandles],
-  );
-  const chartStyle = useMemo<ChartStyleConfig>(
-    () => ({
-      priceGainColor: '#00C853',
-      priceLossColor: '#FF1744',
-      volumeColor: theme.colors.primary,
-      selectionHighlightColor: `${theme.colors.primary}55`,
-      overlayBackgroundColor: theme.colors.surfaceVariant,
-    }),
-    [theme.colors.primary, theme.colors.surfaceVariant],
-  );
 
   const indicatorColorMap = useMemo(
     () => ({
@@ -207,6 +289,101 @@ export default function ExploreScreen() {
   const getIndicatorColor = useCallback(
     (id: string) => indicatorColorMap[id] ?? fallbackIndicatorColor,
     [indicatorColorMap, fallbackIndicatorColor],
+  );
+
+  const movingAverageChartSeries = useMemo(
+    () =>
+      movingAverageSeries.map((series) => ({
+        ...series,
+        color: getIndicatorColor(series.id),
+      })),
+    [getIndicatorColor, movingAverageSeries],
+  );
+
+  const comparisonIndicatorSeries = useMemo(() => {
+    if (baseCandles.length === 0) {
+      return [] as IndicatorSeries[];
+    }
+    return comparisonSymbols
+      .filter((entry) => entry.candles.length > 0)
+      .map((entry) => ({
+        id: `comparison-${entry.symbol}`,
+        label: entry.label,
+        group: 'comparison' as const,
+        values: alignCandlesByTimestamp(baseCandles, entry.candles),
+        color: entry.color,
+      }));
+  }, [baseCandles, comparisonSymbols]);
+
+  const overlayTrendSeries = useMemo(
+    () => [
+      ...(indicatorVisibility.movingAverage ? movingAverageChartSeries : []),
+      ...comparisonIndicatorSeries,
+    ],
+    [indicatorVisibility.movingAverage, movingAverageChartSeries, comparisonIndicatorSeries],
+  );
+
+  const chartData = useMemo(
+    () => mergeCandlesWithIndicators(baseCandles, overlayTrendSeries),
+    [baseCandles, overlayTrendSeries],
+  );
+
+  const chartCandles = chartData.candles;
+  const trendDefinitions = chartData.trendDefinitions;
+
+  const trendLineStyles = useMemo(
+    () =>
+      overlayTrendSeries.map((series) => ({
+        stroke: series.color ?? theme.colors.tertiary ?? theme.colors.primary,
+        strokeWidth: 2,
+      })),
+    [overlayTrendSeries, theme.colors.primary, theme.colors.tertiary],
+  );
+
+  const chartStyle = useMemo<ChartStyleConfig>(
+    () => ({
+      priceGainColor: '#00C853',
+      priceLossColor: '#FF1744',
+      volumeColor: theme.colors.primary,
+      selectionHighlightColor: `${theme.colors.primary}55`,
+      overlayBackgroundColor: theme.colors.surfaceVariant,
+      trendLineStyles,
+    }),
+    [theme.colors.primary, theme.colors.surfaceVariant, trendLineStyles],
+  );
+
+  const candleIndexLookup = useMemo(() => {
+    const map = new Map<number, number>();
+    baseCandles.forEach((candle, index) => {
+      map.set(candle.timestamp, index);
+    });
+    return map;
+  }, [baseCandles]);
+
+  const overlayFormatter = useCallback(
+    (candle: Candle) => {
+      const dateFormatter = new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      const formatted: Record<string, string> = {
+        日付: dateFormatter.format(new Date(candle.timestamp)),
+        始値: candle.open != null ? candle.open.toFixed(2) : '--',
+        高値: candle.high != null ? candle.high.toFixed(2) : '--',
+        安値: candle.low != null ? candle.low.toFixed(2) : '--',
+        終値: candle.close != null ? candle.close.toFixed(2) : '--',
+        出来高: candle.volume != null ? formatVolumeLabel(candle.volume) : '--',
+      };
+      const index = candleIndexLookup.get(candle.timestamp);
+      if (index != null) {
+        comparisonIndicatorSeries.forEach((series) => {
+          formatted[series.label ?? series.id] = formatComparisonValue(series.values[index]);
+        });
+      }
+      return formatted;
+    },
+    [candleIndexLookup, comparisonIndicatorSeries],
   );
 
   const rsiReferenceLines = useMemo<IndicatorReferenceLine[]>(
@@ -242,13 +419,9 @@ export default function ExploreScreen() {
 
   return (
     <View style={screenStyle}>
-      <AppHeader title="チャート" />
       <View style={contentStyle}>
         <Text variant="headlineMedium" style={styles.title}>
           {displayTitle} 株価チャート
-        </Text>
-        <Text variant="titleMedium" style={[styles.subtitle, styles.subtitleText]}>
-          銘柄コード: {selectedSymbol} / 終値 {latestCandle?.close?.toFixed(2) ?? '--'} USD（{formatDate(latestCandle?.timestamp)}）
         </Text>
         <View style={styles.searchContainer}>
           <Searchbar
@@ -261,6 +434,11 @@ export default function ExploreScreen() {
           {searchError ? (
             <HelperText type="error" visible style={styles.searchErrorText}>
               {searchError}
+            </HelperText>
+          ) : null}
+          {comparisonMessage ? (
+            <HelperText type="info" visible style={styles.comparisonMessage}>
+              {comparisonMessage}
             </HelperText>
           ) : null}
           {hasQuery ? (
@@ -281,7 +459,17 @@ export default function ExploreScreen() {
                         title={item.symbol}
                         description={item.name}
                         onPress={() => handleSelectSymbol(item)}
-                        right={() => <List.Icon icon="chart-line" />}
+                        right={() => (
+                          <View style={styles.searchActionContainer}>
+                            <IconButton
+                              icon="plus-circle-outline"
+                              size={22}
+                              disabled={comparisonSymbols.length >= MAX_COMPARISON_SYMBOLS}
+                              onPress={() => handleAddComparisonSymbol(item)}
+                              accessibilityLabel={`${item.symbol} を比較に追加`}
+                            />
+                          </View>
+                        )}
                       />
                       {index < searchResults.length - 1 ? <View style={styles.searchDivider} /> : null}
                     </Fragment>
@@ -291,6 +479,53 @@ export default function ExploreScreen() {
             </Card>
           ) : null}
         </View>
+        <Card mode="outlined" style={styles.comparisonCard}>
+          <Card.Content style={styles.comparisonContent}>
+            <View style={styles.comparisonHeader}>
+              <Text variant="titleMedium" style={styles.subtitleText}>
+                比較銘柄
+              </Text>
+              <Text variant="bodySmall" style={styles.comparisonHint}>
+                最大 {MAX_COMPARISON_SYMBOLS} 銘柄
+              </Text>
+            </View>
+            {comparisonSymbols.length === 0 ? (
+              <Text style={styles.comparisonEmptyText}>
+                検索結果の「＋」ボタンから比較銘柄を追加してください。
+              </Text>
+            ) : (
+              <View style={styles.comparisonList}>
+                {comparisonSymbols.map((entry) => (
+                  <View key={entry.symbol} style={styles.comparisonListItem}>
+                    <View style={[styles.legendSwatch, styles.comparisonSwatch, { backgroundColor: entry.color }]} />
+                    <View style={styles.comparisonTextContainer}>
+                      <Text variant="labelLarge" style={styles.comparisonText}>
+                        {entry.label} ({entry.symbol})
+                      </Text>
+                      {entry.loading ? (
+                        <View style={styles.comparisonStatusRow}>
+                          <ActivityIndicator size="small" color={theme.colors.primary} />
+                          <Text style={styles.comparisonStatusText}>読み込み中...</Text>
+                        </View>
+                      ) : entry.error ? (
+                        <Text style={[styles.comparisonStatusText, { color: theme.colors.error }]}>
+                          {entry.error}
+                        </Text>
+                      ) : (
+                        <Text style={styles.comparisonStatusText}>データ取得済み</Text>
+                      )}
+                    </View>
+                    <IconButton
+                      icon="close"
+                      onPress={() => handleRemoveComparisonSymbol(entry.symbol)}
+                      accessibilityLabel={`${entry.symbol} を比較から削除`}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card.Content>
+        </Card>
         {error ? (
           <HelperText type="error" visible style={styles.errorText}>
             {error}
@@ -331,6 +566,7 @@ export default function ExploreScreen() {
                   trendDefinitions={trendDefinitions}
                   initialVisibleCandleCount={INITIAL_VISIBLE_CANDLE_COUNT}
                   styleConfig={chartStyle}
+                  overlayFormatter={overlayFormatter}
                   style={styles.chart}
                 />
               </>
@@ -359,17 +595,6 @@ export default function ExploreScreen() {
       </View>
     </View>
   );
-}
-
-function formatDate(timestamp?: number) {
-  if (!timestamp) {
-    return 'N/A';
-  }
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return 'N/A';
-  }
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 type IndicatorColorResolver = (id: string) => string;
@@ -485,6 +710,63 @@ function formatIndicatorValue(value: number | null, fractionDigits = 2): string 
   return value.toFixed(fractionDigits);
 }
 
+function pickComparisonColor(existing: ComparisonSymbolEntry[]): string {
+  for (const color of COMPARISON_COLORS) {
+    if (!existing.some((entry) => entry.color === color)) {
+      return color;
+    }
+  }
+  return COMPARISON_COLORS[existing.length % COMPARISON_COLORS.length];
+}
+
+function alignCandlesByTimestamp(base: Candle[], overlay: Candle[]): (number | null)[] {
+  if (base.length === 0) {
+    return [];
+  }
+  if (overlay.length === 0) {
+    return base.map(() => null);
+  }
+  const map = new Map<number, Candle>();
+  overlay.forEach((candle) => {
+    map.set(candle.timestamp, candle);
+  });
+  return base.map((candle) => {
+    const target = map.get(candle.timestamp);
+    if (!target || target.close == null || Number.isNaN(target.close)) {
+      return null;
+    }
+    return target.close;
+  });
+}
+
+function formatComparisonValue(value: number | null): string {
+  if (value == null || Number.isNaN(value)) {
+    return '--';
+  }
+  return value.toFixed(2);
+}
+
+function formatVolumeLabel(volume: number): string {
+  if (!Number.isFinite(volume)) {
+    return '--';
+  }
+  if (volume < 1000) {
+    return volume.toFixed(0);
+  }
+  const suffixes = [
+    { divider: 1e12, suffix: 'T' },
+    { divider: 1e9, suffix: 'B' },
+    { divider: 1e6, suffix: 'M' },
+    { divider: 1e3, suffix: 'K' },
+  ];
+  for (const { divider, suffix } of suffixes) {
+    if (volume >= divider) {
+      return `${(volume / divider).toFixed(1)}${suffix}`;
+    }
+  }
+  return volume.toFixed(0);
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -512,6 +794,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 4,
   },
+  searchActionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   searchLoadingContainer: {
     paddingVertical: 16,
     alignItems: 'center',
@@ -521,6 +807,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 12,
     opacity: 0.7,
+  },
+  comparisonCard: {
+    borderRadius: 16,
+  },
+  comparisonContent: {
+    gap: 8,
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  comparisonHint: {
+    opacity: 0.7,
+  },
+  comparisonEmptyText: {
+    opacity: 0.7,
+  },
+  comparisonList: {
+    gap: 12,
+  },
+  comparisonListItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  comparisonTextContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  comparisonText: {
+    fontWeight: '700',
+  },
+  comparisonStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  comparisonStatusText: {
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  comparisonSwatch: {
+    width: 14,
+    height: 14,
+    marginTop: 4,
+  },
+  comparisonMessage: {
+    marginTop: -4,
   },
   searchDivider: {
     height: StyleSheet.hairlineWidth,
