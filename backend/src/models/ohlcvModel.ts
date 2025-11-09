@@ -2,7 +2,10 @@ import { loadYahooFinance } from './yahooFinanceClient'
 import type { OhlcvItem } from './types'
 
 const MAX_CALENDAR_DAYS_LOOKBACK = 220
-const TARGET_DATA_POINTS = 100
+const TARGET_DATA_POINTS = 200
+
+const isFiniteNumber = (value: number | null | undefined): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
 
 export const fetchDailyOhlcv = async (symbol: string): Promise<OhlcvItem[]> => {
   if (!symbol) {
@@ -15,28 +18,24 @@ export const fetchDailyOhlcv = async (symbol: string): Promise<OhlcvItem[]> => {
   const period1 = new Date(today)
   period1.setDate(period1.getDate() - MAX_CALENDAR_DAYS_LOOKBACK)
 
-  const quotes = await yahooFinance.historical(symbol, {
+  const chartResult = await yahooFinance.chart(symbol, {
     period1,
     period2: today,
     interval: '1d',
+    return: 'array',
   })
 
-  const sanitized = quotes
+  const sanitized = (chartResult.quotes ?? [])
     .filter((quote) => {
-      const { open, high, low, close, adjClose, volume, date } = quote
+      const { open, high, low, close, adjclose, volume, date } = quote
+      const adjustedClose = isFiniteNumber(adjclose) ? adjclose : close
       return (
-        typeof open === 'number' &&
-        typeof high === 'number' &&
-        typeof low === 'number' &&
-        typeof close === 'number' &&
-        typeof adjClose === 'number' &&
-        typeof volume === 'number' &&
-        Number.isFinite(open) &&
-        Number.isFinite(high) &&
-        Number.isFinite(low) &&
-        Number.isFinite(close) &&
-        Number.isFinite(adjClose) &&
-        Number.isFinite(volume) &&
+        isFiniteNumber(open) &&
+        isFiniteNumber(high) &&
+        isFiniteNumber(low) &&
+        isFiniteNumber(close) &&
+        isFiniteNumber(adjustedClose) &&
+        isFiniteNumber(volume) &&
         date instanceof Date &&
         !Number.isNaN(date.getTime())
       )
@@ -47,7 +46,7 @@ export const fetchDailyOhlcv = async (symbol: string): Promise<OhlcvItem[]> => {
       open: quote.open!,
       high: quote.high!,
       low: quote.low!,
-      closeAdjusted: quote.adjClose!,
+      closeAdjusted: (isFiniteNumber(quote.adjclose) ? quote.adjclose : quote.close)!,
       volume: quote.volume!,
     }))
 

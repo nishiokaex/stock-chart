@@ -24,7 +24,7 @@ export interface StockCandleData {
   trendDefinitions: TrendDefinition[]
 }
 
-const TARGET_POINTS = 100
+const TARGET_POINTS = 200
 
 const parseDateToTimestamp = (value?: string): number | null => {
   if (typeof value !== 'string' || value.length === 0) {

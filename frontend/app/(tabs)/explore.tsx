@@ -14,6 +14,7 @@ import type { SymbolSearchItem, SymbolSearchResponse } from '@/types/symbol';
 
 const DEFAULT_SYMBOL = 'AAPL';
 const SEARCH_DEBOUNCE_MS = 300;
+const INITIAL_VISIBLE_CANDLE_COUNT = 180;
 const toParamValue = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
 export default function ExploreScreen() {
@@ -125,13 +126,13 @@ export default function ExploreScreen() {
   const latestCandle = useMemo(() => (candles.length > 0 ? candles[candles.length - 1] : undefined), [candles]);
   const chartStyle = useMemo<ChartStyleConfig>(
     () => ({
-      priceGainColor: theme.colors.secondary,
-      priceLossColor: theme.colors.error,
+      priceGainColor: '#00C853',
+      priceLossColor: '#FF1744',
       volumeColor: theme.colors.primary,
       selectionHighlightColor: `${theme.colors.primary}55`,
       overlayBackgroundColor: theme.colors.surfaceVariant,
     }),
-    [theme.colors.error, theme.colors.primary, theme.colors.secondary, theme.colors.surfaceVariant],
+    [theme.colors.primary, theme.colors.surfaceVariant],
   );
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }];
@@ -210,6 +211,7 @@ export default function ExploreScreen() {
               <InteractiveCandleChart
                 candles={candles}
                 trendDefinitions={trendDefinitions}
+                initialVisibleCandleCount={INITIAL_VISIBLE_CANDLE_COUNT}
                 styleConfig={chartStyle}
                 style={styles.chart}
               />
