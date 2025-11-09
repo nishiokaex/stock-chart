@@ -1,7 +1,7 @@
 import { buildApiUrl } from '@/lib/api/base'
 
-import { computeMovingAverage } from './utils'
-import type { Candle, TrendDefinition } from './types'
+import { computeMacd, computeMovingAverage, computeRsi } from './utils'
+import type { Candle } from './types'
 
 type OhlcvResponse = {
   date?: string
@@ -19,9 +19,18 @@ type StocksApiResponse = {
   data?: OhlcvResponse[]
 }
 
+export type IndicatorGroup = 'movingAverage' | 'rsi' | 'macd'
+
+export interface IndicatorSeries {
+  id: string
+  label: string
+  group: IndicatorGroup
+  values: (number | null)[]
+}
+
 export interface StockCandleData {
   candles: Candle[]
-  trendDefinitions: TrendDefinition[]
+  indicators: IndicatorSeries[]
 }
 
 const TARGET_POINTS = 200
@@ -88,19 +97,19 @@ export const fetchStockCandleData = async (symbol: string): Promise<StockCandleD
 
   const ma7 = computeMovingAverage(candles, 7)
   const ma25 = computeMovingAverage(candles, 25)
+  const rsi14 = computeRsi(candles, 14)
+  const macdResult = computeMacd(candles, 12, 26, 9)
 
-  const candlesWithTrends: Candle[] = candles.map((candle, index) => ({
-    ...candle,
-    trends: [ma7[index] ?? null, ma25[index] ?? null],
-  }))
-
-  const trendDefinitions: TrendDefinition[] = [
-    { id: 'ma7', label: '7日移動平均' },
-    { id: 'ma25', label: '25日移動平均' },
+  const indicators: IndicatorSeries[] = [
+    { id: 'ma7', label: '7日移動平均', group: 'movingAverage', values: ma7 },
+    { id: 'ma25', label: '25日移動平均', group: 'movingAverage', values: ma25 },
+    { id: 'rsi14', label: 'RSI(14)', group: 'rsi', values: rsi14 },
+    { id: 'macd', label: 'MACD', group: 'macd', values: macdResult.macd },
+    { id: 'macdSignal', label: 'MACDシグナル', group: 'macd', values: macdResult.signal },
   ]
 
   return {
-    candles: candlesWithTrends,
-    trendDefinitions,
+    candles,
+    indicators,
   }
 }

@@ -43,6 +43,141 @@ export function computeMovingAverage(candles: Candle[], period = 7): (number | n
   return result;
 }
 
+export function computeRsi(candles: Candle[], period = 14): (number | null)[] {
+  if (period <= 0) {
+    throw new Error("period must be greater than zero");
+  }
+  if (candles.length === 0) {
+    return [];
+  }
+
+  const closes = candles.map((item) => item.close);
+  const result: (number | null)[] = Array(candles.length).fill(null);
+  let avgGain: number | null = null;
+  let avgLoss: number | null = null;
+  let seedCount = 0;
+  let seedGains = 0;
+  let seedLosses = 0;
+
+  for (let i = 1; i < closes.length; i += 1) {
+    const current = closes[i];
+    const previous = closes[i - 1];
+    if (current == null || previous == null) {
+      continue;
+    }
+
+    const change = current - previous;
+    const gain = change > 0 ? change : 0;
+    const loss = change < 0 ? -change : 0;
+
+    if (avgGain == null || avgLoss == null) {
+      seedCount += 1;
+      seedGains += gain;
+      seedLosses += loss;
+      if (seedCount >= period) {
+        avgGain = seedGains / period;
+        avgLoss = seedLosses / period;
+        result[i] = calculateRsiValue(avgGain, avgLoss);
+      }
+      continue;
+    }
+
+    avgGain = ((avgGain * (period - 1)) + gain) / period;
+    avgLoss = ((avgLoss * (period - 1)) + loss) / period;
+    result[i] = calculateRsiValue(avgGain, avgLoss);
+  }
+
+  return result;
+}
+
+export interface MacdResult {
+  macd: (number | null)[];
+  signal: (number | null)[];
+  histogram: (number | null)[];
+}
+
+export function computeMacd(
+  candles: Candle[],
+  fastPeriod = 12,
+  slowPeriod = 26,
+  signalPeriod = 9,
+): MacdResult {
+  if (fastPeriod <= 0 || slowPeriod <= 0 || signalPeriod <= 0) {
+    throw new Error("period must be greater than zero");
+  }
+  if (candles.length === 0) {
+    return { macd: [], signal: [], histogram: [] };
+  }
+
+  const closes = candles.map((item) => item.close);
+  const fastEma = computeEma(closes, fastPeriod);
+  const slowEma = computeEma(closes, slowPeriod);
+  const macd: (number | null)[] = closes.map((_, index) => {
+    const fast = fastEma[index];
+    const slow = slowEma[index];
+    if (fast == null || slow == null) {
+      return null;
+    }
+    return fast - slow;
+  });
+
+  const signal = computeEma(macd, signalPeriod);
+  const histogram: (number | null)[] = macd.map((value, index) => {
+    const signalValue = signal[index];
+    if (value == null || signalValue == null) {
+      return null;
+    }
+    return value - signalValue;
+  });
+
+  return { macd, signal, histogram };
+}
+
+function calculateRsiValue(avgGain: number, avgLoss: number): number {
+  if (avgLoss === 0) {
+    return avgGain === 0 ? 50 : 100;
+  }
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+function computeEma(values: (number | null)[], period: number): (number | null)[] {
+  if (period <= 0) {
+    throw new Error("period must be greater than zero");
+  }
+  if (values.length === 0) {
+    return [];
+  }
+
+  const multiplier = 2 / (period + 1);
+  const result: (number | null)[] = Array(values.length).fill(null);
+  let ema: number | null = null;
+  let seedTotal = 0;
+  let seedCount = 0;
+
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (value == null) {
+      continue;
+    }
+
+    if (ema == null) {
+      seedTotal += value;
+      seedCount += 1;
+      if (seedCount >= period) {
+        ema = seedTotal / period;
+        result[i] = ema;
+      }
+      continue;
+    }
+
+    ema = (value - ema) * multiplier + ema;
+    result[i] = ema;
+  }
+
+  return result;
+}
+
 export function extractPriceExtremes(candles: Candle[]): PriceExtremes {
   if (candles.length === 0) {
     return { maxPrice: 1, minPrice: 0 };

@@ -1,14 +1,16 @@
 import axios from 'axios';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Card, HelperText, List, Searchbar, Text, useTheme } from 'react-native-paper';
+import { Card, Chip, HelperText, List, Searchbar, Text, useTheme } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AppHeader } from '@/components/app-header';
-import { InteractiveCandleChart } from '@/components/charts';
+import { IndicatorMiniChart, InteractiveCandleChart } from '@/components/charts';
+import type { IndicatorReferenceLine } from '@/components/charts';
 import { buildApiUrl } from '@/lib/api/base';
 import type { ChartStyleConfig } from '@/lib/charts/style';
 import { fetchStockCandleData } from '@/lib/charts/stock-data';
+import type { IndicatorSeries } from '@/lib/charts/stock-data';
 import type { Candle, TrendDefinition } from '@/lib/charts/types';
 import type { SymbolSearchItem, SymbolSearchResponse } from '@/types/symbol';
 
@@ -17,11 +19,24 @@ const SEARCH_DEBOUNCE_MS = 300;
 const INITIAL_VISIBLE_CANDLE_COUNT = 180;
 const toParamValue = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
+type IndicatorToggleKey = 'movingAverage' | 'rsi' | 'macd';
+
+const INDICATOR_TOGGLES: { key: IndicatorToggleKey; label: string }[] = [
+  { key: 'movingAverage', label: '移動平均線' },
+  { key: 'rsi', label: 'RSI' },
+  { key: 'macd', label: 'MACD' },
+];
+
 export default function ExploreScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [trendDefinitions, setTrendDefinitions] = useState<TrendDefinition[]>([]);
+  const [baseCandles, setBaseCandles] = useState<Candle[]>([]);
+  const [indicatorSeries, setIndicatorSeries] = useState<IndicatorSeries[]>([]);
+  const [indicatorVisibility, setIndicatorVisibility] = useState<Record<IndicatorToggleKey, boolean>>({
+    movingAverage: true,
+    rsi: false,
+    macd: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,22 +64,22 @@ export default function ExploreScreen() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setCandles([]);
-    setTrendDefinitions([]);
+    setBaseCandles([]);
+    setIndicatorSeries([]);
 
     const load = async () => {
       try {
         const data = await fetchStockCandleData(selectedSymbol);
         if (!cancelled) {
-          setCandles(data.candles);
-          setTrendDefinitions(data.trendDefinitions);
+          setBaseCandles(data.candles);
+          setIndicatorSeries(data.indicators);
           setError(null);
         }
       } catch (err) {
         console.error('[chart] failed to load candles', err);
         if (!cancelled) {
-          setCandles([]);
-          setTrendDefinitions([]);
+          setBaseCandles([]);
+          setIndicatorSeries([]);
           setError(`${selectedSymbol} のデータの取得に失敗しました。`);
         }
       } finally {
@@ -110,6 +125,41 @@ export default function ExploreScreen() {
     return () => clearTimeout(handler);
   }, [performSearch, searchQuery]);
 
+  const movingAverageSeries = useMemo(
+    () => indicatorSeries.filter((item) => item.group === 'movingAverage'),
+    [indicatorSeries],
+  );
+  const rsiSeries = useMemo(
+    () => indicatorSeries.filter((item) => item.group === 'rsi'),
+    [indicatorSeries],
+  );
+  const macdSeries = useMemo(
+    () => indicatorSeries.filter((item) => item.group === 'macd'),
+    [indicatorSeries],
+  );
+
+  const chartData = useMemo(() => {
+    if (!indicatorVisibility.movingAverage || movingAverageSeries.length === 0) {
+      return { candles: baseCandles, trendDefinitions: [] as TrendDefinition[] };
+    }
+    return mergeCandlesWithIndicators(baseCandles, movingAverageSeries);
+  }, [baseCandles, indicatorVisibility.movingAverage, movingAverageSeries]);
+
+  const chartCandles = chartData.candles;
+  const trendDefinitions = chartData.trendDefinitions;
+
+  const hasIndicatorData = useCallback(
+    (key: IndicatorToggleKey) => indicatorSeries.some((item) => item.group === key),
+    [indicatorSeries],
+  );
+
+  const toggleIndicatorVisibility = useCallback((key: IndicatorToggleKey) => {
+    setIndicatorVisibility((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  }, []);
+
   const handleSelectSymbol = useCallback(
     (item: SymbolSearchItem) => {
       router.setParams({
@@ -123,7 +173,10 @@ export default function ExploreScreen() {
     [router],
   );
 
-  const latestCandle = useMemo(() => (candles.length > 0 ? candles[candles.length - 1] : undefined), [candles]);
+  const latestCandle = useMemo(
+    () => (baseCandles.length > 0 ? baseCandles[baseCandles.length - 1] : undefined),
+    [baseCandles],
+  );
   const chartStyle = useMemo<ChartStyleConfig>(
     () => ({
       priceGainColor: '#00C853',
@@ -133,6 +186,54 @@ export default function ExploreScreen() {
       overlayBackgroundColor: theme.colors.surfaceVariant,
     }),
     [theme.colors.primary, theme.colors.surfaceVariant],
+  );
+
+  const indicatorColorMap = useMemo(
+    () => ({
+      ma7: theme.colors.primary,
+      ma25: theme.colors.secondary,
+      rsi14: theme.colors.tertiary ?? theme.colors.primary,
+      macd: theme.colors.primary,
+      macdSignal: theme.colors.secondary,
+    }),
+    [theme.colors.primary, theme.colors.secondary, theme.colors.tertiary],
+  );
+
+  const fallbackIndicatorColor = useMemo(
+    () => theme.colors.onSurfaceVariant ?? theme.colors.primary,
+    [theme.colors.onSurfaceVariant, theme.colors.primary],
+  );
+
+  const getIndicatorColor = useCallback(
+    (id: string) => indicatorColorMap[id] ?? fallbackIndicatorColor,
+    [indicatorColorMap, fallbackIndicatorColor],
+  );
+
+  const rsiReferenceLines = useMemo<IndicatorReferenceLine[]>(
+    () => [
+      { id: 'rsi-overbought', value: 70, color: theme.colors.error, dashArray: '6 4', opacity: 0.7 },
+      {
+        id: 'rsi-oversold',
+        value: 30,
+        color: theme.colors.tertiary ?? theme.colors.secondary,
+        dashArray: '6 4',
+        opacity: 0.7,
+      },
+    ],
+    [theme.colors.error, theme.colors.secondary, theme.colors.tertiary],
+  );
+
+  const macdReferenceLines = useMemo<IndicatorReferenceLine[]>(
+    () => [
+      {
+        id: 'macd-zero',
+        value: 0,
+        color: theme.colors.outline ?? theme.colors.onSurfaceVariant,
+        dashArray: '4 4',
+        opacity: 0.5,
+      },
+    ],
+    [theme.colors.onSurfaceVariant, theme.colors.outline],
   );
 
   const screenStyle = [styles.screen, { backgroundColor: theme.colors.background }];
@@ -208,16 +309,53 @@ export default function ExploreScreen() {
                 </Text>
               </View>
             ) : (
-              <InteractiveCandleChart
-                candles={candles}
-                trendDefinitions={trendDefinitions}
-                initialVisibleCandleCount={INITIAL_VISIBLE_CANDLE_COUNT}
-                styleConfig={chartStyle}
-                style={styles.chart}
-              />
+              <>
+                <View style={styles.indicatorToggleRow}>
+                  {INDICATOR_TOGGLES.map((item) => (
+                    <Chip
+                      key={item.key}
+                      icon={indicatorVisibility[item.key] ? 'eye' : 'eye-off'}
+                      selected={indicatorVisibility[item.key]}
+                      onPress={() => toggleIndicatorVisibility(item.key)}
+                      disabled={!hasIndicatorData(item.key)}
+                      style={styles.indicatorToggleChip}
+                      compact
+                      mode="outlined"
+                    >
+                      {item.label}
+                    </Chip>
+                  ))}
+                </View>
+                <InteractiveCandleChart
+                  candles={chartCandles}
+                  trendDefinitions={trendDefinitions}
+                  initialVisibleCandleCount={INITIAL_VISIBLE_CANDLE_COUNT}
+                  styleConfig={chartStyle}
+                  style={styles.chart}
+                />
+              </>
             )}
           </Card.Content>
         </Card>
+        {indicatorVisibility.rsi && rsiSeries.length > 0 ? (
+          <IndicatorDetailCard
+            title="RSI (14)"
+            series={rsiSeries}
+            colorForId={getIndicatorColor}
+            referenceLines={rsiReferenceLines}
+            fixedRange={{ min: 0, max: 100 }}
+            formatValue={(value) => formatIndicatorValue(value, 2)}
+          />
+        ) : null}
+        {indicatorVisibility.macd && macdSeries.length > 0 ? (
+          <IndicatorDetailCard
+            title="MACD (12,26,9)"
+            series={macdSeries}
+            colorForId={getIndicatorColor}
+            referenceLines={macdReferenceLines}
+            formatValue={(value) => formatIndicatorValue(value, 3)}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -232,6 +370,119 @@ function formatDate(timestamp?: number) {
     return 'N/A';
   }
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+type IndicatorColorResolver = (id: string) => string;
+
+interface IndicatorDetailCardProps {
+  title: string;
+  series: IndicatorSeries[];
+  colorForId: IndicatorColorResolver;
+  referenceLines?: IndicatorReferenceLine[];
+  fixedRange?: { min?: number; max?: number };
+  formatValue?: (value: number | null) => string;
+}
+
+const IndicatorDetailCard = ({
+  title,
+  series,
+  colorForId,
+  referenceLines,
+  fixedRange,
+  formatValue = (value) => formatIndicatorValue(value, 2),
+}: IndicatorDetailCardProps) => {
+  const chartSeries = useMemo(
+    () =>
+      series.map((indicator) => ({
+        id: indicator.id,
+        color: colorForId(indicator.id),
+        values: indicator.values,
+      })),
+    [colorForId, series],
+  );
+
+  const legendItems = useMemo(
+    () =>
+      series.map((indicator) => ({
+        id: indicator.id,
+        label: indicator.label ?? indicator.id,
+        color: colorForId(indicator.id),
+        value: getLatestValue(indicator.values),
+      })),
+    [colorForId, series],
+  );
+
+  if (chartSeries.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card mode="outlined" style={styles.indicatorCard}>
+      <Card.Content>
+        <Text variant="titleMedium" style={styles.indicatorTitle}>
+          {title}
+        </Text>
+        <IndicatorMiniChart
+          series={chartSeries}
+          referenceLines={referenceLines}
+          min={fixedRange?.min}
+          max={fixedRange?.max}
+          style={styles.indicatorChart}
+        />
+        <View style={styles.indicatorLegend}>
+          {legendItems.map((item) => (
+            <View key={item.id} style={styles.indicatorLegendItem}>
+              <View style={[styles.legendSwatch, { backgroundColor: item.color }]} />
+              <Text variant="labelSmall" style={styles.indicatorLegendText}>
+                {item.label}: {formatValue(item.value)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </Card.Content>
+    </Card>
+  );
+};
+
+function mergeCandlesWithIndicators(
+  candles: Candle[],
+  indicators: IndicatorSeries[],
+): { candles: Candle[]; trendDefinitions: TrendDefinition[] } {
+  if (candles.length === 0 || indicators.length === 0) {
+    return { candles, trendDefinitions: [] };
+  }
+
+  const trendDefinitions: TrendDefinition[] = indicators.map((indicator) => ({
+    id: indicator.id,
+    label: indicator.label,
+  }));
+
+  const mergedCandles = candles.map((candle, candleIndex) => ({
+    ...candle,
+    trends: indicators.map((indicator) => indicator.values[candleIndex] ?? null),
+  }));
+
+  return {
+    candles: mergedCandles,
+    trendDefinitions,
+  };
+}
+
+function getLatestValue(values: (number | null)[]): number | null {
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    const value = values[i];
+    if (value != null && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function formatIndicatorValue(value: number | null, fractionDigits = 2): string {
+  if (value == null || Number.isNaN(value)) {
+    return '--';
+  }
+  return value.toFixed(fractionDigits);
 }
 
 const styles = StyleSheet.create({
@@ -284,6 +535,46 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 0,
     paddingVertical: 12,
+  },
+  indicatorToggleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+    paddingHorizontal: 12,
+  },
+  indicatorToggleChip: {
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  indicatorCard: {
+    borderRadius: 16,
+  },
+  indicatorTitle: {
+    fontWeight: '700',
+  },
+  indicatorChart: {
+    width: '100%',
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  indicatorLegend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  indicatorLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 8,
+  },
+  indicatorLegendText: {
+    fontWeight: '600',
+  },
+  legendSwatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 6,
   },
   chart: {
     flex: 1,
